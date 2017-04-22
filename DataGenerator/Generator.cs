@@ -217,6 +217,9 @@ namespace DataGenerator
                 isSingleton = true;
                 if (singleton != null)
                 {
+                    // Register possible back references in singleton.
+                    SetProperties(singleton, sources, true);
+
                     return singleton;
                 }
             }
@@ -233,7 +236,7 @@ namespace DataGenerator
 
             sources.Add(result);
 
-            SetProperties(result, sources);
+            SetProperties(result, sources, false);
 
             sources.RemoveAt(sources.Count - 1);
 
@@ -334,7 +337,7 @@ namespace DataGenerator
             return null;
         }
 
-        private void SetProperties(object o, IList<object> sources)
+        private void SetProperties(object o, IList<object> sources, bool singleton)
         {
             var t = o.GetType();
             var unhandled = new List<PropertyInfo>();
@@ -345,7 +348,11 @@ namespace DataGenerator
                 Func<object, object> valueFunc;
                 if (this.with.TryGetValue(p, out valueFunc))
                 {
-                    p.SetMethod.Invoke(o, new[] { valueFunc(o) });
+                    if (!singleton)
+                    {
+                        p.SetMethod.Invoke(o, new[] { valueFunc(o) });
+                    }
+
                     continue;
                 }
 
@@ -364,7 +371,11 @@ namespace DataGenerator
                 object val = null;
                 if (this.TryCreateValue(pt, p.Name, out val))
                 {
-                    p.SetMethod.Invoke(o, new[] { val });
+                    if (!singleton)
+                    {
+                        p.SetMethod.Invoke(o, new[] { val });
+                    }
+
                     handled.Add(p);
                 }
                 else
@@ -373,82 +384,105 @@ namespace DataGenerator
                 }
             }
 
-            foreach (var p in unhandled)
+            for (var pass = 1; pass <= 2; ++pass)
             {
-                var noSources = this.withoutAncestry.Contains(p);
-                var pt = p.PropertyType;
-
-                if (pt.IsGenericType)
+                // Pass 1, update pk id for 1:1 relation.
+                // Pass 2, the rest.
+                foreach (var p in unhandled)
                 {
-                    if (pt.GetGenericTypeDefinition() == typeof(ICollection<>))
+                    var noSources = this.withoutAncestry.Contains(p);
+                    var pt = p.PropertyType;
+
+                    if (pt.IsGenericType)
                     {
-                        var elementType = pt.GetGenericArguments()[0];
-                        var collection = p.GetMethod.Invoke(o, new object[0]);
-                        if (collection == null)
+                        if (pt.GetGenericTypeDefinition() == typeof(ICollection<>))
                         {
-                            collection = Activator.CreateInstance(typeof(HashSet<>).MakeGenericType(elementType));
-                            p.SetMethod.Invoke(o, new[] { collection });
-                        }
-                        var add = collection.GetType().GetMethod("Add");
-                        var source = noSources ? null : GetSource(sources, elementType);
-                        if (source != null)
-                        {
-                            add.Invoke(collection, new[] { source });
-                        }
-                        else
-                        {
-                            if (this.withoutType.Contains(elementType))
+                            if (pass != 2)
                             {
                                 continue;
                             }
 
-                            var elementCount = 0;
-
-                            if (!this.include.TryGetValue(p, out elementCount))
+                            var elementType = pt.GetGenericArguments()[0];
+                            var collection = p.GetMethod.Invoke(o, new object[0]);
+                            if (collection == null)
                             {
-                                elementCount = this.objectCount == 1 ? this.RootCollectionMembers : this.LeafCollectionMembers;
+                                collection = Activator.CreateInstance(typeof(HashSet<>).MakeGenericType(elementType));
+                                p.SetMethod.Invoke(o, new[] { collection });
                             }
-
-                            for (var i = 0; i < elementCount; ++i)
+                            var add = collection.GetType().GetMethod("Add");
+                            var source = noSources ? null : GetSource(sources, elementType);
+                            if (source != null)
                             {
-                                add.Invoke(collection, new[] { Create(elementType, sources) });
+                                add.Invoke(collection, new[] { source });
                             }
+                            else
+                            {
+                                if (this.withoutType.Contains(elementType))
+                                {
+                                    continue;
+                                }
+
+                                if (singleton)
+                                {
+                                    continue;
+                                }
+
+                                var elementCount = 0;
+
+                                if (!this.include.TryGetValue(p, out elementCount))
+                                {
+                                    elementCount = this.objectCount == 1 ? this.RootCollectionMembers : this.LeafCollectionMembers;
+                                }
+
+                                for (var i = 0; i < elementCount; ++i)
+                                {
+                                    add.Invoke(collection, new[] { Create(elementType, sources) });
+                                }
+                            }
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException("Unsupported type");
                         }
                     }
                     else
                     {
-                        throw new InvalidOperationException("Unsupported type");
+                        var source = (noSources ? null : GetSource(sources, pt)) ?? this.Create(pt, sources);
+
+                        var backRefId = handled.SingleOrDefault(idp => idp.Name == p.Name + "Id");
+
+                        if (backRefId == null)
+                        {
+                            // 1:1 relation, special case. will change pk of current object.
+                            backRefId = handled.SingleOrDefault(idp => idp.Name == "Id");
+                        }
+                        else if (pass != 2)
+                        {
+                            continue;
+                        }
+
+                        var id = source.GetType().GetProperty("Id");
+
+                        if (id == null || backRefId == null)
+                        {
+                            // TODO register customizer for this case.
+                            throw new InvalidOperationException($"Unable to connect {t.Name} back to {pt.Name}");
+                        }
+
+                        if (singleton)
+                        {
+                            var existing = p.GetMethod.Invoke(o, new object[0]);
+
+                            if (source != existing && existing != null)
+                            {
+                                throw new InvalidOperationException($"Ambiguous property for singleton {t.Name}.{p.Name}.");
+                            }
+                        }
+
+                        backRefId.SetMethod.Invoke(o, new[] { id.GetMethod.Invoke(source, new object[0]) });
+
+                        p.SetMethod.Invoke(o, new[] { source });
                     }
-                }
-                else
-                {
-                    var source = noSources ? null : GetSource(sources, pt);
-
-                    if (source == null)
-                    {
-                        source = this.Create(pt, sources);
-                    }
-
-                    var backRefId = handled.SingleOrDefault(idp => idp.Name == p.Name + "Id");
-
-                    if (backRefId == null)
-                    {
-                        // 1:1 relation, special case. will change pk of current object.
-                        // TODO this should be done first in this loop so that the object is complete when creating related objects.
-                        backRefId = handled.SingleOrDefault(idp => idp.Name == "Id");
-                    }
-
-                    var id = source.GetType().GetProperty("Id");
-
-                    if (id == null || backRefId == null)
-                    {
-                        // TODO register customizer for this case.
-                        throw new InvalidOperationException($"Unable to connect {t.Name} back to {pt.Name}");
-                    }
-
-                    backRefId.SetMethod.Invoke(o, new[] { id.GetMethod.Invoke(source, new object[0]) });
-
-                    p.SetMethod.Invoke(o, new[] { source });
                 }
             }
         }
