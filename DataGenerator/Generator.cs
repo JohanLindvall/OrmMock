@@ -195,7 +195,12 @@ namespace DataGenerator
         public T Create<T>()
             where T : new()
         {
-            return (T)Create(typeof(T), new List<object>(), string.Empty);
+            object result;
+            if (this.TryCreateValue(typeof(T), string.Empty, out result))
+            {
+                return (T)result;
+            }
+            return (T)Create(typeof(T), new List<object>());
         }
 
         private PropertyInfo[] GetPropertyInfos(Type t)
@@ -203,70 +208,8 @@ namespace DataGenerator
             return t.GetProperties();
         }
 
-        private object Create(Type t, IList<object> sources, string prefix)
+        private object Create(Type t, IList<object> sources)
         {
-            if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>))
-            {
-                if (this.Random.Next(0, 1) == 0)
-                {
-                    return null;
-                }
-                else
-                {
-                    t = Nullable.GetUnderlyingType(t);
-                }
-            }
-
-            if (t.IsEnum)
-            {
-                var values = Enum.GetValues(t);
-                return values.GetValue(this.Random.Next(0, values.Length - 1));
-            }
-            else if (t == typeof(string))
-            {
-                return prefix + BitConverter.ToString(Enumerable.Range(0, 20).Select(_ => (byte)this.Random.Next(0, 255)).ToArray());
-            }
-            else if (t == typeof(short))
-            {
-                return (short)this.Random.Next(short.MinValue, short.MaxValue);
-            }
-            else if (t == typeof(int))
-            {
-                return this.Random.Next(int.MinValue, int.MaxValue);
-            }
-            else if (t == typeof(long))
-            {
-                return BitConverter.ToInt64(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray(), 0);
-            }
-            else if (t == typeof(double))
-            {
-                return (this.Random.NextDouble() - 0.5) * double.MaxValue;
-            }
-            else if (t == typeof(float))
-            {
-                return (float)(this.Random.NextDouble() - 0.5) * float.MaxValue;
-            }
-            else if (t == typeof(decimal))
-            {
-                return (decimal)(this.Random.NextDouble() - 0.5) * decimal.MaxValue;
-            }
-            else if (t == typeof(bool))
-            {
-                return this.Random.Next(0, 1) == 1;
-            }
-            else if (t == typeof(Guid))
-            {
-                return new Guid(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray());
-            }
-            else if (t == typeof(DateTimeOffset))
-            {
-                return DateTimeOffset.Now + TimeSpan.FromMilliseconds((this.Random.NextDouble() - 0.5) * 62e9);
-            }
-            else
-            {
-
-            }
-
             var isSingleton = false;
             object singleton;
             if (this.singletons.TryGetValue(t, out singleton))
@@ -302,6 +245,82 @@ namespace DataGenerator
             return result;
         }
 
+        private bool TryCreateValue(Type t, string prefix, out object result)
+        {
+            Func<object> creator;
+            if (this.typeWith.TryGetValue(t, out creator))
+            {
+                result = creator();
+                return true;
+            }
+
+            if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>))
+            {
+                if (this.Random.Next(0, 1) == 0)
+                {
+                    result = null;
+                    return true;
+                }
+                else
+                {
+                    t = Nullable.GetUnderlyingType(t);
+                }
+            }
+
+            if (t.IsEnum)
+            {
+                var values = Enum.GetValues(t);
+                result = values.GetValue(this.Random.Next(0, values.Length - 1));
+            }
+            else if (t == typeof(string))
+            {
+                result = prefix + BitConverter.ToString(Enumerable.Range(0, 20).Select(_ => (byte)this.Random.Next(0, 255)).ToArray());
+            }
+            else if (t == typeof(short))
+            {
+                result = (short)this.Random.Next(short.MinValue, short.MaxValue);
+            }
+            else if (t == typeof(int))
+            {
+                result = this.Random.Next(int.MinValue, int.MaxValue);
+            }
+            else if (t == typeof(long))
+            {
+                result = BitConverter.ToInt64(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray(), 0);
+            }
+            else if (t == typeof(double))
+            {
+                result = (this.Random.NextDouble() - 0.5) * double.MaxValue;
+            }
+            else if (t == typeof(float))
+            {
+                result = (float)(this.Random.NextDouble() - 0.5) * float.MaxValue;
+            }
+            else if (t == typeof(decimal))
+            {
+                result = (decimal)(this.Random.NextDouble() - 0.5) * decimal.MaxValue;
+            }
+            else if (t == typeof(bool))
+            {
+                result = this.Random.Next(0, 1) == 1;
+            }
+            else if (t == typeof(Guid))
+            {
+                result = new Guid(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray());
+            }
+            else if (t == typeof(DateTimeOffset))
+            {
+                result = DateTimeOffset.Now + TimeSpan.FromMilliseconds((this.Random.NextDouble() - 0.5) * 62e9);
+            }
+            else
+            {
+                result = null;
+                return false;
+            }
+
+            return true;
+        }
+
         private object GetSource(IList<object> sources, Type sourceType)
         {
             for (var i = sources.Count - 2; i >= 0; --i)
@@ -318,6 +337,8 @@ namespace DataGenerator
         private void SetProperties(object o, IList<object> sources)
         {
             var t = o.GetType();
+            var unhandled = new List<PropertyInfo>();
+            var handled = new List<PropertyInfo>();
 
             foreach (var p in GetPropertyInfos(t))
             {
@@ -340,9 +361,24 @@ namespace DataGenerator
                     continue;
                 }
 
-                var noSources = this.withoutAncestry.Contains(p);
+                object val = null;
+                if (this.TryCreateValue(pt, p.Name, out val))
+                {
+                    p.SetMethod.Invoke(o, new[] { val });
+                    handled.Add(p);
+                }
+                else
+                {
+                    unhandled.Add(p);
+                }
+            }
 
-                if (pt.IsGenericType && pt.GetGenericTypeDefinition() != typeof(Nullable<>))
+            foreach (var p in unhandled)
+            {
+                var noSources = this.withoutAncestry.Contains(p);
+                var pt = p.PropertyType;
+
+                if (pt.IsGenericType)
                 {
                     if (pt.GetGenericTypeDefinition() == typeof(ICollection<>))
                     {
@@ -357,7 +393,6 @@ namespace DataGenerator
                         var source = noSources ? null : GetSource(sources, elementType);
                         if (source != null)
                         {
-                            // Set back reference.
                             add.Invoke(collection, new[] { source });
                         }
                         else
@@ -376,7 +411,7 @@ namespace DataGenerator
 
                             for (var i = 0; i < elementCount; ++i)
                             {
-                                add.Invoke(collection, new[] { Create(elementType, sources, p.Name) });
+                                add.Invoke(collection, new[] { Create(elementType, sources) });
                             }
                         }
                     }
@@ -387,7 +422,31 @@ namespace DataGenerator
                 }
                 else
                 {
-                    var source = (noSources ? null : GetSource(sources, pt)) ?? Create(pt, sources, p.Name);
+                    var source = noSources ? null : GetSource(sources, pt);
+
+                    if (source == null)
+                    {
+                        source = this.Create(pt, sources);
+                    }
+
+                    var backRefId = handled.SingleOrDefault(idp => idp.Name == p.Name + "Id");
+
+                    if (backRefId == null)
+                    {
+                        // 1:1 relation, special case. will change pk of current object.
+                        // TODO this should be done first in this loop so that the object is complete when creating related objects.
+                        backRefId = handled.SingleOrDefault(idp => idp.Name == "Id");
+                    }
+
+                    var id = source.GetType().GetProperty("Id");
+
+                    if (id == null || backRefId == null)
+                    {
+                        // TODO register customizer for this case.
+                        throw new InvalidOperationException($"Unable to connect {t.Name} back to {pt.Name}");
+                    }
+
+                    backRefId.SetMethod.Invoke(o, new[] { id.GetMethod.Invoke(source, new object[0]) });
 
                     p.SetMethod.Invoke(o, new[] { source });
                 }
