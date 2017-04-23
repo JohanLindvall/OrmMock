@@ -203,6 +203,58 @@ namespace DataGenerator
             return (T)Create(typeof(T), new List<object>());
         }
 
+        /// <summary>
+        /// Creates an object of the given type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object.</typeparam>
+        /// <typeparam name="T2">The type of the parameter.</typeparam>
+        /// <param name="e">The setter expression</param>
+        /// <param name="value">The value</param>
+        /// <returns>The created object.</returns>
+        public T Create<T, T2>(Expression<Func<T, T2>> e, T2 value)
+            where T : new()
+        {
+            object result;
+            if (this.TryCreateValue(typeof(T), string.Empty, out result))
+            {
+                return (T)result;
+            }
+            var result2 = (T)Create(typeof(T), new List<object>());
+            (((e.Body as MemberExpression).Member) as PropertyInfo).SetMethod.Invoke(result2, new[] { (object)value });
+            return result2;
+        }
+
+        /// <summary>
+        /// Creates many objects of the given type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object.</typeparam>
+        /// <returns>The created objects.</returns>
+        public IEnumerable<T> CreateMany<T>(int create = 3)
+            where T : new()
+        {
+            while (create-- > 0)
+            {
+                yield return this.Create<T>();
+            }
+        }
+
+        /// <summary>
+        /// Creates many objects of the given type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object.</typeparam>
+        /// <typeparam name="T2">The type of the parameter.</typeparam>
+        /// <param name="e">The setter expression</param>
+        /// <param name="values">The values</param>
+        /// <returns>The created objects.</returns>
+        public IEnumerable<T> CreateMany<T, T2>(Expression<Func<T, T2>> e, params T2[] values)
+            where T : new()
+        {
+            foreach (var value in values)
+            {
+                yield return this.Create(e, value);
+            }
+        }
+
         private PropertyInfo[] GetPropertyInfos(Type t)
         {
             return t.GetProperties();
@@ -224,8 +276,11 @@ namespace DataGenerator
                 }
             }
 
-            var diag = $"{new string(' ', 4 * sources.Count)}{t}";
-            Console.WriteLine(diag);
+            if (this.Logging)
+            {
+                var diag = $"{new string(' ', 4 * sources.Count)}{t}";
+                Console.WriteLine(diag);
+            }
 
             if (++this.objectCount > this.ObjectLimit)
             {
@@ -301,7 +356,7 @@ namespace DataGenerator
             }
             else if (t == typeof(decimal))
             {
-                result = (decimal)(this.Random.NextDouble() - 0.5) * decimal.MaxValue;
+                result = (decimal)(this.Random.NextDouble() - 0.5) * 1e2m; // TODO look into overflows?
             }
             else if (t == typeof(bool))
             {
@@ -447,20 +502,23 @@ namespace DataGenerator
                     }
                     else
                     {
-                        var source = (noSources ? null : GetSource(sources, pt)) ?? this.Create(pt, sources);
-
                         var backRefId = handled.SingleOrDefault(idp => idp.Name == p.Name + "Id");
 
                         if (backRefId == null)
                         {
                             // 1:1 relation, special case. will change pk of current object.
                             backRefId = handled.SingleOrDefault(idp => idp.Name == "Id");
+                            if (backRefId == null || pass != 1)
+                            {
+                                continue;
+                            }
                         }
-                        else if (pass != 2)
+                        else if (pass == 1)
                         {
                             continue;
                         }
 
+                        var source = (noSources ? null : GetSource(sources, pt)) ?? this.Create(pt, sources);
                         var id = source.GetType().GetProperty("Id");
 
                         if (id == null || backRefId == null)
