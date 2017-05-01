@@ -19,7 +19,7 @@ namespace DataGenerator
         /// <summary>
         /// Holds the hashset of properties to exclude.
         /// </summary>
-        private readonly HashSet<PropertyInfo> without = new HashSet<PropertyInfo>();
+        private readonly HashSet<PropertyInfo> withoutProperty = new HashSet<PropertyInfo>();
 
         /// <summary>
         /// Holds the hashset of types to exclude.
@@ -29,7 +29,17 @@ namespace DataGenerator
         /// <summary>
         /// Holds the hashset of properties for which ancestry should be ignored..
         /// </summary>
-        private readonly HashSet<PropertyInfo> withoutAncestry = new HashSet<PropertyInfo>();
+        private readonly HashSet<PropertyInfo> withoutAncestryForProperty = new HashSet<PropertyInfo>();
+
+        /// <summary>
+        /// Holds the hashset of types for which ancestry should be ignored.
+        /// </summary>
+        private readonly HashSet<Type> withoutAncestryForType = new HashSet<Type>();
+
+        /// <summary>
+        /// Holds the hashset of types for which ancestry should be ignored when create constructor arguments.
+        /// </summary>
+        private readonly HashSet<Type> withoutAncestryForConstructor = new HashSet<Type>();
 
         /// <summary>
         /// Holds the dictionary of navigation properties to include and the count of items to create.
@@ -50,6 +60,11 @@ namespace DataGenerator
         /// Holds the dictionary of overridden types.
         /// </summary>
         private readonly Dictionary<Type, Func<object>> typeWith = new Dictionary<Type, Func<object>>();
+
+        /// <summary>
+        /// Holds the list of created objects.
+        /// </summary>
+        private readonly IList<object> createdObjects = new List<object>();
 
         /// <summary>
         /// Gets or sets the limit of how many object to create in one pass.
@@ -81,7 +96,7 @@ namespace DataGenerator
         /// <returns>The generator.</returns>
         public Generator Without<T>(Expression<Func<T, object>> e)
         {
-            this.without.Add(((e.Body as MemberExpression).Member) as PropertyInfo);
+            this.withoutProperty.Add(((e.Body as MemberExpression).Member) as PropertyInfo);
             return this;
         }
 
@@ -104,7 +119,29 @@ namespace DataGenerator
         /// <returns>The generator.</returns>
         public Generator WithoutAncestry<T>(Expression<Func<T, object>> e)
         {
-            this.withoutAncestry.Add(((e.Body as MemberExpression).Member) as PropertyInfo);
+            this.withoutAncestryForProperty.Add(((e.Body as MemberExpression).Member) as PropertyInfo);
+            return this;
+        }
+
+        /// <summary>
+        /// Exludes ancestry from being used when creating constructor parameters for a type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object to construct.</typeparam>
+        /// <returns>The generator.</returns>
+        public Generator WithoutAncestryForConstructor<T>()
+        {
+            this.withoutAncestryForConstructor.Add(typeof(T));
+            return this;
+        }
+
+        /// <summary>
+        /// Exludes ancestry from being used when setting properties on the type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object for which to ignore ancestry.</typeparam>
+        /// <returns>The generator.</returns>
+        public Generator WithoutAncestry<T>()
+        {
+            this.withoutAncestryForType.Add(typeof(T));
             return this;
         }
 
@@ -143,7 +180,7 @@ namespace DataGenerator
         }
 
         /// <summary>
-        /// Sets a type to a speficic valuer
+        /// Sets a type to a specific value
         /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <param name="creator">The function returning an object.</param>
@@ -188,12 +225,51 @@ namespace DataGenerator
         }
 
         /// <summary>
+        /// Gets the object of the specified type at the given index.
+        /// </summary>
+        /// <typeparam name="T">The type of the object.</typeparam>
+        /// <param name="index">The index of the object to get.</param>
+        /// <returns>The object at the given index.</returns>
+        public T GetObject<T>(int index)
+        {
+            return (T)this.createdObjects.Where(o => o.GetType() == typeof(T)).Skip(index).First();
+        }
+
+        /// <summary>
+        /// Gets the object of the specified type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object.</typeparam>
+        /// <returns>The objectsx.</returns>
+        public IEnumerable<T> GetObjects<T>()
+        {
+            return this.createdObjects.Where(o => o.GetType() == typeof(T)).Select(o => (T)o);
+        }
+
+        /// <summary>
+        /// Gets the object of the specified type at the given index.
+        /// </summary>
+        /// <param name="index">The index of the object to get.</param>
+        /// <returns>The object at the given index.</returns>
+        public object GetObject(int index)
+        {
+            return this.createdObjects.Skip(index).First();
+        }
+
+        /// <summary>
+        /// Gets the object of the specified type.
+        /// </summary>
+        /// <returns>The objectsx.</returns>
+        public IEnumerable<object> GetObjects()
+        {
+            return this.createdObjects;
+        }
+
+        /// <summary>
         /// Creates an object of the given type.
         /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <returns>The created object.</returns>
         public T Create<T>()
-            where T : new()
         {
             object result;
             if (this.TryCreateValue(typeof(T), string.Empty, out result))
@@ -212,16 +288,10 @@ namespace DataGenerator
         /// <param name="value">The value</param>
         /// <returns>The created object.</returns>
         public T Create<T, T2>(Expression<Func<T, T2>> e, T2 value)
-            where T : new()
         {
-            object result;
-            if (this.TryCreateValue(typeof(T), string.Empty, out result))
-            {
-                return (T)result;
-            }
-            var result2 = (T)Create(typeof(T), new List<object>());
-            (((e.Body as MemberExpression).Member) as PropertyInfo).SetMethod.Invoke(result2, new[] { (object)value });
-            return result2;
+            var result = this.Create<T>();
+            (((e.Body as MemberExpression).Member) as PropertyInfo).SetMethod.Invoke(result, new[] { (object)value });
+            return result;
         }
 
         /// <summary>
@@ -255,11 +325,6 @@ namespace DataGenerator
             }
         }
 
-        private PropertyInfo[] GetPropertyInfos(Type t)
-        {
-            return t.GetProperties();
-        }
-
         private object Create(Type t, IList<object> sources)
         {
             var isSingleton = false;
@@ -270,11 +335,30 @@ namespace DataGenerator
                 if (singleton != null)
                 {
                     // Register possible back references in singleton.
-                    SetProperties(singleton, sources, true);
+                    this.SetProperties(singleton, sources, true);
 
                     return singleton;
                 }
             }
+
+            var ctor = t.GetConstructors().SingleOrDefault();
+
+            var constructorArgs = ctor?.GetParameters().Select(p =>
+            {
+                object constructorParameter;
+                if (this.TryCreateValue(p.ParameterType, t.Name, out constructorParameter))
+                {
+                    return constructorParameter;
+                }
+
+                if (this.withoutType.Contains(p.ParameterType))
+                {
+                    return null;
+                }
+
+                var source = (this.withoutAncestryForType.Contains(p.ParameterType) || this.withoutAncestryForConstructor.Contains(p.ParameterType)) ? null : GetSource(sources, p.ParameterType);
+                return source ?? Create(p.ParameterType, sources);
+            }).ToArray();
 
             if (this.Logging)
             {
@@ -287,11 +371,13 @@ namespace DataGenerator
                 throw new InvalidOperationException($"Attempt to create more than {this.ObjectLimit} objects.");
             }
 
-            var result = Activator.CreateInstance(t);
+            var result = Activator.CreateInstance(t, constructorArgs);
 
             sources.Add(result);
 
-            SetProperties(result, sources, false);
+            this.createdObjects.Add(result);
+
+            this.SetProperties(result, sources, false);
 
             sources.RemoveAt(sources.Count - 1);
 
@@ -332,7 +418,7 @@ namespace DataGenerator
             }
             else if (t == typeof(string))
             {
-                result = prefix + BitConverter.ToString(Enumerable.Range(0, 20).Select(_ => (byte)this.Random.Next(0, 255)).ToArray());
+                result = prefix + BitConverter.ToString(Enumerable.Range(0, 20).Select(_ => (byte)this.Random.Next(0, 255)).ToArray()).Replace("-", string.Empty);
             }
             else if (t == typeof(short))
             {
@@ -395,10 +481,10 @@ namespace DataGenerator
         private void SetProperties(object o, IList<object> sources, bool singleton)
         {
             var t = o.GetType();
-            var unhandled = new List<PropertyInfo>();
-            var handled = new List<PropertyInfo>();
+            var valueProperties = new List<PropertyInfo>();
+            var referenceProperties = new List<PropertyInfo>();
 
-            foreach (var p in GetPropertyInfos(t))
+            foreach (var p in t.GetProperties())
             {
                 Func<object, object> valueFunc;
                 if (this.with.TryGetValue(p, out valueFunc))
@@ -411,7 +497,7 @@ namespace DataGenerator
                     continue;
                 }
 
-                if (this.without.Contains(p))
+                if (this.withoutProperty.Contains(p))
                 {
                     continue;
                 }
@@ -431,11 +517,11 @@ namespace DataGenerator
                         p.SetMethod.Invoke(o, new[] { val });
                     }
 
-                    handled.Add(p);
+                    valueProperties.Add(p);
                 }
                 else
                 {
-                    unhandled.Add(p);
+                    referenceProperties.Add(p);
                 }
             }
 
@@ -443,9 +529,9 @@ namespace DataGenerator
             {
                 // Pass 1, update pk id for 1:1 relation.
                 // Pass 2, the rest.
-                foreach (var p in unhandled)
+                foreach (var p in referenceProperties)
                 {
-                    var noSources = this.withoutAncestry.Contains(p);
+                    var noSources = this.withoutAncestryForType.Contains(t) || this.withoutAncestryForProperty.Contains(p);
                     var pt = p.PropertyType;
 
                     if (pt.IsGenericType)
@@ -502,12 +588,12 @@ namespace DataGenerator
                     }
                     else
                     {
-                        var backRefId = handled.SingleOrDefault(idp => idp.Name == p.Name + "Id");
+                        var backRefId = valueProperties.SingleOrDefault(idp => idp.Name == p.Name + "Id");
 
                         if (backRefId == null)
                         {
                             // 1:1 relation, special case. will change pk of current object.
-                            backRefId = handled.SingleOrDefault(idp => idp.Name == "Id");
+                            backRefId = valueProperties.SingleOrDefault(idp => idp.Name == "Id");
                             if (backRefId == null || pass != 1)
                             {
                                 continue;
