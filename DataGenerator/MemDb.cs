@@ -33,14 +33,33 @@ namespace DataGenerator
     /// </summary>
     public class MemDb
     {
+        /// <summary>
+        /// Holds the dictionary of types to objects.
+        /// </summary>
         private readonly Dictionary<Type, List<object>> heldObjects = new Dictionary<Type, List<object>>();
 
+        /// <summary>
+        /// Holds the dictionary of types to key properties
+        /// </summary>
         private readonly Dictionary<Type, PropertyInfo[]> knownKeys = new Dictionary<Type, PropertyInfo[]>();
 
         /// <summary>
         /// Gets or sets the include filter, defining which types to include in the db.
         /// </summary>
         public Func<Type, bool> IncludeFilter { get; set; }
+
+        /// <summary>
+        /// Gets the count of objects for a specific type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object</typeparam>
+        /// <returns>The count of objects of the given type.</returns>
+        public int Count<T>() where T : class => this.Queryable<T>().Count();
+
+        /// <summary>
+        /// Gets the total count of objects
+        /// </summary>
+        /// <returns>The total count of objects</returns>
+        public int Count() => this.heldObjects.Select(h => h.Value.Count).Sum();
 
         /// <summary>
         /// Registers an expression defining the primary keys of an object.
@@ -50,18 +69,35 @@ namespace DataGenerator
         public void RegisterKey<T>(Expression<Func<T, object>> expression)
             where T : class
         {
-            if (expression.Body is NewExpression)
+            var body = expression.Body;
+            var ue = body as UnaryExpression;
+            if (ue != null && ue.NodeType == ExpressionType.Convert)
             {
-                this.knownKeys.Add(typeof(T), (expression.Body as NewExpression).Arguments.Select(a => ((MemberExpression)a).Member as PropertyInfo).ToArray());
+                body = ue.Operand;
             }
-            else if (expression.Body is MemberExpression)
+
+            NewExpression ne;
+            MemberExpression me;
+            if ((ne = body as NewExpression) != null)
             {
-                this.knownKeys.Add(typeof(T), new[] { (expression.Body as MemberExpression).Member as PropertyInfo });
+                var mes = ne.Arguments.Select(a => a as MemberExpression).ToArray();
+                if (mes.All(t => t != null))
+                {
+                    this.knownKeys.Add(typeof(T), mes.Select(a => a.Member as PropertyInfo).ToArray());
+                    return;
+                }
             }
-            else
+            else if ((me = body as MemberExpression) != null)
             {
-                throw new InvalidOperationException("Unsupported expression.");
+                var pi = me.Member as PropertyInfo;
+                if (pi != null)
+                {
+                    this.knownKeys.Add(typeof(T), new[] { me.Member as PropertyInfo });
+                }
+                return;
             }
+
+            throw new InvalidOperationException("Unsupported expression.");
         }
 
         /// <summary>
@@ -80,7 +116,7 @@ namespace DataGenerator
         /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <param name="keys">The keys.</param>
-        /// <returns></returns>
+        /// <returns>The stored object of the given type, or null if the object was not found.</returns>
         public T Get<T>(params object[] keys)
             where T : class
         {
@@ -173,7 +209,7 @@ namespace DataGenerator
 
             visited.Add(obj);
 
-            foreach (var prop in t.GetProperties().Where(p => p.PropertyType.IsClass))
+            foreach (var prop in t.GetProperties().Where(p => p.PropertyType.IsClass || p.PropertyType.IsInterface))
             {
                 var dest = prop.GetMethod.Invoke(obj, new object[0]);
 
@@ -184,16 +220,13 @@ namespace DataGenerator
 
                 var pt = prop.PropertyType;
 
-                if (pt.IsGenericType)
+                if (pt.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICollection<>)))
                 {
-                    if (pt.GetGenericTypeDefinition() == typeof(ICollection<>))
-                    {
-                        var elementType = pt.GetGenericArguments()[0];
+                    var elementType = pt.GetGenericArguments()[0];
 
-                        foreach (var collObj in obj as IEnumerable)
-                        {
-                            this.Add(elementType, collObj, visited);
-                        }
+                    foreach (var collObj in dest as IEnumerable)
+                    {
+                        this.Add(elementType, collObj, visited);
                     }
                 }
                 else
