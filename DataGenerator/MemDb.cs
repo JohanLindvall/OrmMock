@@ -39,9 +39,9 @@ namespace DataGenerator
         private readonly Dictionary<Type, List<object>> heldObjects = new Dictionary<Type, List<object>>();
 
         /// <summary>
-        /// Holds the dictionary of types to key properties
+        /// Holds the object relations.
         /// </summary>
-        private readonly Dictionary<Type, PropertyInfo[]> knownKeys = new Dictionary<Type, PropertyInfo[]>();
+        private readonly Relations relations = new Relations();
 
         /// <summary>
         /// Gets or sets the include filter, defining which types to include in the db.
@@ -66,39 +66,7 @@ namespace DataGenerator
         /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <param name="expression">The expression defining the primary keys.</param>
-        public void RegisterKey<T>(Expression<Func<T, object>> expression)
-            where T : class
-        {
-            var body = expression.Body;
-            var ue = body as UnaryExpression;
-            if (ue != null && ue.NodeType == ExpressionType.Convert)
-            {
-                body = ue.Operand;
-            }
-
-            NewExpression ne;
-            MemberExpression me;
-            if ((ne = body as NewExpression) != null)
-            {
-                var mes = ne.Arguments.Select(a => a as MemberExpression).ToArray();
-                if (mes.All(t => t != null))
-                {
-                    this.knownKeys.Add(typeof(T), mes.Select(a => a.Member as PropertyInfo).ToArray());
-                    return;
-                }
-            }
-            else if ((me = body as MemberExpression) != null)
-            {
-                var pi = me.Member as PropertyInfo;
-                if (pi != null)
-                {
-                    this.knownKeys.Add(typeof(T), new[] { me.Member as PropertyInfo });
-                }
-                return;
-            }
-
-            throw new InvalidOperationException("Unsupported expression.");
-        }
+        public void RegisterKey<T>(Expression<Func<T, object>> expression) where T : class => this.relations.RegisterPrimaryKeys(expression);
 
         /// <summary>
         /// Adds an object to the DB.
@@ -270,25 +238,7 @@ namespace DataGenerator
             return -1;
         }
 
-        private PropertyInfo[] GetKeyProperties(Type t)
-        {
-            PropertyInfo[] result;
-
-            if (!this.knownKeys.TryGetValue(t, out result))
-            {
-                var key = t.GetProperty("Id");
-
-                if (key == null)
-                {
-                    throw new InvalidOperationException($@"Unable to determine key for type '{t.Name}'.");
-                }
-
-                result = new[] { key };
-                this.knownKeys.Add(t, result);
-            }
-
-            return result;
-        }
+        private PropertyInfo[] GetKeyProperties(Type t) => this.relations.GetPrimaryKeys(t);
 
         private class ObjectEqualityComparer : IEqualityComparer<object>
         {
