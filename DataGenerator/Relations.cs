@@ -83,7 +83,9 @@ namespace DataGenerator
                     throw new InvalidOperationException($@"Unable to determine key for type '{t.Name}'.");
                 }
 
-                this.primaryKeys.Add(t, new[] { key });
+                result = new[] { key };
+
+                this.primaryKeys.Add(t, result);
             }
 
             return result;
