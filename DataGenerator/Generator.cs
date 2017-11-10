@@ -22,9 +22,7 @@ namespace DataGenerator
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using System.Linq.Expressions;
-    using System.Reflection;
 
     /// <summary>
     /// Defines a class for generating object hierarchies.
@@ -32,81 +30,14 @@ namespace DataGenerator
     public class Generator
     {
         /// <summary>
-        /// Holds the number of objects generated.
+        /// Holds the structure data.
         /// </summary>
-        private int objectCount;
+        private readonly Structure structure = new Structure();
 
         /// <summary>
-        /// Holds the hashset of properties to exclude.
+        /// Gets the relations.
         /// </summary>
-        private readonly HashSet<PropertyInfo> withoutProperty = new HashSet<PropertyInfo>();
-
-        /// <summary>
-        /// Holds the hashset of types to exclude.
-        /// </summary>
-        private readonly HashSet<Type> withoutType = new HashSet<Type>();
-
-        /// <summary>
-        /// Holds the hashset of properties for which ancestry should be ignored..
-        /// </summary>
-        private readonly HashSet<PropertyInfo> withoutAncestryForProperty = new HashSet<PropertyInfo>();
-
-        /// <summary>
-        /// Holds the hashset of types for which ancestry should be ignored.
-        /// </summary>
-        private readonly HashSet<Type> withoutAncestryForType = new HashSet<Type>();
-
-        /// <summary>
-        /// Holds the hashset of types for which ancestry should be ignored when create constructor arguments.
-        /// </summary>
-        private readonly HashSet<Type> withoutAncestryForConstructor = new HashSet<Type>();
-
-        /// <summary>
-        /// Holds the dictionary of navigation properties to include and the count of items to create.
-        /// </summary>
-        private readonly Dictionary<PropertyInfo, int> include = new Dictionary<PropertyInfo, int>();
-
-        /// <summary>
-        /// Holds the dictionary of singleton objects.
-        /// </summary>
-        private readonly Dictionary<Type, object> singletons = new Dictionary<Type, object>();
-
-        /// <summary>
-        /// Holds the dictionary of overridden property values.
-        /// </summary>
-        private readonly Dictionary<PropertyInfo, Func<object, object>> with = new Dictionary<PropertyInfo, Func<object, object>>();
-
-        /// <summary>
-        /// Holds the dictionary of overridden types.
-        /// </summary>
-        private readonly Dictionary<Type, Func<object>> typeWith = new Dictionary<Type, Func<object>>();
-
-        /// <summary>
-        /// Holds the list of created objects.
-        /// </summary>
-        private readonly IList<object> createdObjects = new List<object>();
-
-        /// <summary>
-        /// Gets or sets the limit of how many object to create in one pass.
-        /// </summary>
-        public int ObjectLimit { get; set; } = 1000;
-
-        /// <summary>
-        /// Gets or sets the number of items top create in root level object collections.
-        /// </summary>
-        public int RootCollectionMembers { get; set; } = 3;
-
-        /// <summary>
-        /// Gets or sets the number of items top create in leaf level object collections.
-        /// </summary>
-        public int LeafCollectionMembers { get; set; } = 0;
-
-        /// <summary>
-        /// Gets or sets value determining if logging of object creation should be enabled.
-        /// </summary>
-        public bool Logging { get; set; }
-
-        public Random Random { get; } = new Random();
+        public Relations Relations => this.structure.Relations;
 
         /// <summary>
         /// Excludes a property from being set.
@@ -115,8 +46,13 @@ namespace DataGenerator
         /// <param name="e">The expression func for the object.</param>
         /// <returns>The generator.</returns>
         public Generator Without<T>(Expression<Func<T, object>> e)
+            where T : class
         {
-            this.withoutProperty.Add(((e.Body as MemberExpression).Member) as PropertyInfo);
+            foreach (var property in ExpressionUtility.GetPropertyInfo(e))
+            {
+                this.structure.WithoutProperty.Add(property);
+            }
+
             return this;
         }
 
@@ -127,7 +63,8 @@ namespace DataGenerator
         /// <returns>The generator.</returns>
         public Generator Without<T>()
         {
-            this.withoutType.Add(typeof(T));
+            this.structure.WithoutType.Add(typeof(T));
+
             return this;
         }
 
@@ -138,8 +75,13 @@ namespace DataGenerator
         /// <param name="e">The expression func for the object.</param>
         /// <returns>The generator.</returns>
         public Generator WithoutAncestry<T>(Expression<Func<T, object>> e)
+            where T : class
         {
-            this.withoutAncestryForProperty.Add(((e.Body as MemberExpression).Member) as PropertyInfo);
+            foreach (var property in ExpressionUtility.GetPropertyInfo(e))
+            {
+                this.structure.WithoutAncestryForProperty.Add(property);
+            }
+
             return this;
         }
 
@@ -150,7 +92,8 @@ namespace DataGenerator
         /// <returns>The generator.</returns>
         public Generator WithoutAncestryForConstructor<T>()
         {
-            this.withoutAncestryForConstructor.Add(typeof(T));
+            this.structure.WithoutAncestryForConstructor.Add(typeof(T));
+
             return this;
         }
 
@@ -161,7 +104,8 @@ namespace DataGenerator
         /// <returns>The generator.</returns>
         public Generator WithoutAncestry<T>()
         {
-            this.withoutAncestryForType.Add(typeof(T));
+            this.structure.WithoutAncestryForType.Add(typeof(T));
+
             return this;
         }
 
@@ -173,15 +117,18 @@ namespace DataGenerator
         /// <param name="count">The number of items to create. Default is 3.</param>
         /// <returns>The generator.</returns>
         public Generator Include<T>(Expression<Func<T, object>> e, int count = 3)
+            where T : class
         {
-            var pi = ((e.Body as MemberExpression).Member) as PropertyInfo;
-
-            if (pi.PropertyType.GetGenericTypeDefinition() != typeof(ICollection<>))
+            foreach (var property in ExpressionUtility.GetPropertyInfo(e))
             {
-                throw new ArgumentException("Must be ICollection<>");
+                if (property.PropertyType.GetGenericTypeDefinition() != typeof(ICollection<>))
+                {
+                    throw new ArgumentException("Must be ICollection<>");
+                }
+
+                this.structure.Include.Add(property, count);
             }
 
-            this.include.Add(pi, count);
             return this;
         }
 
@@ -194,8 +141,13 @@ namespace DataGenerator
         /// <param name="value">The value generator.</param>
         /// <returns>The generator.</returns>
         public Generator With<T, T2>(Expression<Func<T, T2>> e, Func<T, T2> value)
+            where T : class
         {
-            this.with.Add(((e.Body as MemberExpression).Member) as PropertyInfo, o => (object)value((T)o));
+            foreach (var property in ExpressionUtility.GetPropertyInfo(e))
+            {
+                this.structure.CustomPropertySetters.Add(property, o => (object)value((T)o));
+            }
+
             return this;
         }
 
@@ -207,7 +159,8 @@ namespace DataGenerator
         /// <returns>The generator.</returns>
         public Generator With<T>(Func<T> creator)
         {
-            this.typeWith.Add(typeof(T), () => creator());
+            this.structure.CustomConstructors.Add(typeof(T), () => creator());
+
             return this;
         }
 
@@ -218,432 +171,18 @@ namespace DataGenerator
         /// <returns>The generator.</returns>
         public Generator Singleton<T>()
         {
-            this.singletons.Add(typeof(T), null);
+            this.structure.Singletons.Add(typeof(T));
+
             return this;
         }
 
         /// <summary>
-        /// Registers a specific object type to be a singleton of a specific value
+        /// Creates an object context from the static structure.
         /// </summary>
-        /// <typeparam name="T">The type of the object.</typeparam>
-        /// <param name="value">The singleton value to register.</param>
-        /// <returns>The generator.</returns>
-        public Generator Singleton<T>(T value)
+        /// <returns>An object context.</returns>
+        public ObjectContext CreateContext()
         {
-            this.singletons.Add(typeof(T), value);
-            return this;
-        }
-
-        /// <summary>
-        /// Gets a singleton value for the given type.
-        /// </summary>
-        /// <typeparam name="T">The singleton type.</typeparam>
-        /// <returns>The singleton value.</returns>
-        public T GetSingleton<T>()
-        {
-            return (T)this.singletons[typeof(T)];
-        }
-
-        /// <summary>
-        /// Gets the object of the specified type at the given index.
-        /// </summary>
-        /// <typeparam name="T">The type of the object.</typeparam>
-        /// <param name="index">The index of the object to get.</param>
-        /// <returns>The object at the given index.</returns>
-        public T GetObject<T>(int index)
-        {
-            return (T)this.createdObjects.Where(o => o.GetType() == typeof(T)).Skip(index).First();
-        }
-
-        /// <summary>
-        /// Gets the object of the specified type.
-        /// </summary>
-        /// <typeparam name="T">The type of the object.</typeparam>
-        /// <returns>The objectsx.</returns>
-        public IEnumerable<T> GetObjects<T>()
-        {
-            return this.createdObjects.Where(o => o.GetType() == typeof(T)).Select(o => (T)o);
-        }
-
-        /// <summary>
-        /// Gets the object of the specified type at the given index.
-        /// </summary>
-        /// <param name="index">The index of the object to get.</param>
-        /// <returns>The object at the given index.</returns>
-        public object GetObject(int index)
-        {
-            return this.createdObjects.Skip(index).First();
-        }
-
-        /// <summary>
-        /// Gets the object of the specified type.
-        /// </summary>
-        /// <returns>The objects.</returns>
-        public IEnumerable<object> GetObjects()
-        {
-            return this.createdObjects;
-        }
-
-        /// <summary>
-        /// Creates an object of the given type.
-        /// </summary>
-        /// <typeparam name="T">The type of the object.</typeparam>
-        /// <returns>The created object.</returns>
-        public T Create<T>()
-        {
-            object result;
-            if (this.TryCreateValue(typeof(T), string.Empty, out result))
-            {
-                return (T)result;
-            }
-            return (T)Create(typeof(T), new List<object>());
-        }
-
-        /// <summary>
-        /// Creates an object of the given type.
-        /// </summary>
-        /// <typeparam name="T">The type of the object.</typeparam>
-        /// <typeparam name="T2">The type of the parameter.</typeparam>
-        /// <param name="e">The setter expression</param>
-        /// <param name="value">The value</param>
-        /// <returns>The created object.</returns>
-        public T Create<T, T2>(Expression<Func<T, T2>> e, T2 value)
-        {
-            var result = this.Create<T>();
-            (((e.Body as MemberExpression).Member) as PropertyInfo).SetMethod.Invoke(result, new[] { (object)value });
-            return result;
-        }
-
-        /// <summary>
-        /// Creates many objects of the given type.
-        /// </summary>
-        /// <typeparam name="T">The type of the object.</typeparam>
-        /// <returns>The created objects.</returns>
-        public IEnumerable<T> CreateMany<T>(int create = 3)
-            where T : new()
-        {
-            while (create-- > 0)
-            {
-                yield return this.Create<T>();
-            }
-        }
-
-        /// <summary>
-        /// Creates many objects of the given type.
-        /// </summary>
-        /// <typeparam name="T">The type of the object.</typeparam>
-        /// <typeparam name="T2">The type of the parameter.</typeparam>
-        /// <param name="e">The setter expression</param>
-        /// <param name="values">The values</param>
-        /// <returns>The created objects.</returns>
-        public IEnumerable<T> CreateMany<T, T2>(Expression<Func<T, T2>> e, params T2[] values)
-            where T : new()
-        {
-            foreach (var value in values)
-            {
-                yield return this.Create(e, value);
-            }
-        }
-
-        private object Create(Type t, IList<object> sources)
-        {
-            var isSingleton = false;
-            object singleton;
-            if (this.singletons.TryGetValue(t, out singleton))
-            {
-                isSingleton = true;
-                if (singleton != null)
-                {
-                    // Register possible back references in singleton.
-                    this.SetProperties(singleton, sources, true);
-
-                    return singleton;
-                }
-            }
-
-            var ctor = t.GetConstructors().SingleOrDefault();
-
-            var constructorArgs = ctor?.GetParameters().Select(p =>
-            {
-                object constructorParameter;
-                if (this.TryCreateValue(p.ParameterType, t.Name, out constructorParameter))
-                {
-                    return constructorParameter;
-                }
-
-                if (this.withoutType.Contains(p.ParameterType))
-                {
-                    return null;
-                }
-
-                var source = (this.withoutAncestryForType.Contains(p.ParameterType) || this.withoutAncestryForConstructor.Contains(p.ParameterType)) ? null : GetSource(sources, p.ParameterType);
-                return source ?? Create(p.ParameterType, sources);
-            }).ToArray();
-
-            if (this.Logging)
-            {
-                var diag = $"{new string(' ', 4 * sources.Count)}{t}";
-                Console.WriteLine(diag);
-            }
-
-            if (++this.objectCount > this.ObjectLimit)
-            {
-                throw new InvalidOperationException($"Attempt to create more than {this.ObjectLimit} objects.");
-            }
-
-            var result = Activator.CreateInstance(t, constructorArgs);
-
-            sources.Add(result);
-
-            this.createdObjects.Add(result);
-
-            this.SetProperties(result, sources, false);
-
-            sources.RemoveAt(sources.Count - 1);
-
-            if (isSingleton)
-            {
-                this.singletons[t] = result;
-            }
-
-            return result;
-        }
-
-        private bool TryCreateValue(Type t, string prefix, out object result)
-        {
-            Func<object> creator;
-            if (this.typeWith.TryGetValue(t, out creator))
-            {
-                result = creator();
-                return true;
-            }
-
-            if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>))
-            {
-                if (this.Random.Next(0, 1) == 0)
-                {
-                    result = null;
-                    return true;
-                }
-                else
-                {
-                    t = Nullable.GetUnderlyingType(t);
-                }
-            }
-
-            if (t.IsEnum)
-            {
-                var values = Enum.GetValues(t);
-                result = values.GetValue(this.Random.Next(0, values.Length - 1));
-            }
-            else if (t == typeof(string))
-            {
-                result = prefix + BitConverter.ToString(Enumerable.Range(0, 20).Select(_ => (byte)this.Random.Next(0, 255)).ToArray()).Replace("-", string.Empty);
-            }
-            else if (t == typeof(short))
-            {
-                result = (short)this.Random.Next(short.MinValue, short.MaxValue);
-            }
-            else if (t == typeof(int))
-            {
-                result = this.Random.Next(int.MinValue, int.MaxValue);
-            }
-            else if (t == typeof(long))
-            {
-                result = BitConverter.ToInt64(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray(), 0);
-            }
-            else if (t == typeof(double))
-            {
-                result = (this.Random.NextDouble() - 0.5) * double.MaxValue;
-            }
-            else if (t == typeof(float))
-            {
-                result = (float)(this.Random.NextDouble() - 0.5) * float.MaxValue;
-            }
-            else if (t == typeof(decimal))
-            {
-                result = (decimal)(this.Random.NextDouble() - 0.5) * 1e2m; // TODO look into overflows?
-            }
-            else if (t == typeof(bool))
-            {
-                result = this.Random.Next(0, 1) == 1;
-            }
-            else if (t == typeof(Guid))
-            {
-                result = new Guid(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray());
-            }
-            else if (t == typeof(DateTimeOffset))
-            {
-                result = DateTimeOffset.Now + TimeSpan.FromMilliseconds((this.Random.NextDouble() - 0.5) * 62e9);
-            }
-            else
-            {
-                result = null;
-                return false;
-            }
-
-            return true;
-        }
-
-        private object GetSource(IList<object> sources, Type sourceType)
-        {
-            for (var i = sources.Count - 2; i >= 0; --i)
-            {
-                if (sources[i].GetType() == sourceType)
-                {
-                    return sources[i];
-                }
-            }
-
-            return null;
-        }
-
-        private void SetProperties(object o, IList<object> sources, bool singleton)
-        {
-            var t = o.GetType();
-            var valueProperties = new List<PropertyInfo>();
-            var referenceProperties = new List<PropertyInfo>();
-
-            foreach (var p in t.GetProperties())
-            {
-                Func<object, object> valueFunc;
-                if (this.with.TryGetValue(p, out valueFunc))
-                {
-                    if (!singleton)
-                    {
-                        p.SetMethod.Invoke(o, new[] { valueFunc(o) });
-                    }
-
-                    continue;
-                }
-
-                if (this.withoutProperty.Contains(p))
-                {
-                    continue;
-                }
-
-                var pt = p.PropertyType;
-
-                if (this.withoutType.Contains(pt))
-                {
-                    continue;
-                }
-
-                object val = null;
-                if (this.TryCreateValue(pt, p.Name, out val))
-                {
-                    if (!singleton)
-                    {
-                        p.SetMethod.Invoke(o, new[] { val });
-                    }
-
-                    valueProperties.Add(p);
-                }
-                else
-                {
-                    referenceProperties.Add(p);
-                }
-            }
-
-            for (var pass = 1; pass <= 2; ++pass)
-            {
-                // Pass 1, update pk id for 1:1 relation.
-                // Pass 2, the rest.
-                foreach (var p in referenceProperties)
-                {
-                    var noSources = this.withoutAncestryForType.Contains(t) || this.withoutAncestryForProperty.Contains(p);
-                    var pt = p.PropertyType;
-
-                    if (pt.IsGenericType)
-                    {
-                        if (pt.GetGenericTypeDefinition() == typeof(ICollection<>))
-                        {
-                            if (pass != 2)
-                            {
-                                continue;
-                            }
-
-                            var elementType = pt.GetGenericArguments()[0];
-                            var collection = p.GetMethod.Invoke(o, new object[0]);
-                            if (collection == null)
-                            {
-                                collection = Activator.CreateInstance(typeof(HashSet<>).MakeGenericType(elementType));
-                                p.SetMethod.Invoke(o, new[] { collection });
-                            }
-                            var add = collection.GetType().GetMethod("Add");
-                            var source = noSources ? null : GetSource(sources, elementType);
-                            if (source != null)
-                            {
-                                add.Invoke(collection, new[] { source });
-                            }
-                            else
-                            {
-                                if (singleton)
-                                {
-                                    continue;
-                                }
-
-                                var elementCount = 0;
-
-                                if (!this.include.TryGetValue(p, out elementCount))
-                                {
-                                    elementCount = this.objectCount == 1 ? this.RootCollectionMembers : this.LeafCollectionMembers;
-                                }
-
-                                for (var i = 0; i < elementCount; ++i)
-                                {
-                                    add.Invoke(collection, new[] { Create(elementType, sources) });
-                                }
-                            }
-                        }
-                        else
-                        {
-                            throw new InvalidOperationException("Unsupported type");
-                        }
-                    }
-                    else
-                    {
-                        var backRefId = valueProperties.SingleOrDefault(idp => idp.Name == p.Name + "Id");
-
-                        if (backRefId == null)
-                        {
-                            // 1:1 relation, special case. will change pk of current object.
-                            backRefId = valueProperties.SingleOrDefault(idp => idp.Name == "Id");
-                            if (backRefId == null || pass != 1)
-                            {
-                                continue;
-                            }
-                        }
-                        else if (pass == 1)
-                        {
-                            continue;
-                        }
-
-                        var source = (noSources ? null : GetSource(sources, pt)) ?? this.Create(pt, sources);
-                        var id = source.GetType().GetProperty("Id");
-
-                        if (id == null || backRefId == null)
-                        {
-                            // TODO register customizer for this case.
-                            throw new InvalidOperationException($"Unable to connect {t.Name} back to {pt.Name}");
-                        }
-
-                        if (singleton)
-                        {
-                            var existing = p.GetMethod.Invoke(o, new object[0]);
-
-                            if (source != existing && existing != null)
-                            {
-                                throw new InvalidOperationException($"Ambiguous property for singleton {t.Name}.{p.Name}.");
-                            }
-                        }
-
-                        backRefId.SetMethod.Invoke(o, new[] { id.GetMethod.Invoke(source, new object[0]) });
-
-                        p.SetMethod.Invoke(o, new[] { source });
-                    }
-                }
-            }
+            return new ObjectContext(this.structure);
         }
     }
 }

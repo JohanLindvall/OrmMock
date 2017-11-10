@@ -22,14 +22,13 @@ namespace DataGenerator
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
 
     /// <summary>
     /// Defines relations for objects, including primary keys and foreign keys.
     /// </summary>
-    class Relations
+    public class Relations
     {
         /// <summary>
         /// Holds the dictionary of types to key properties
@@ -49,7 +48,7 @@ namespace DataGenerator
         public void RegisterPrimaryKeys<T>(Expression<Func<T, object>> expression)
             where T : class
         {
-            this.primaryKeys.Add(typeof(T), this.GetPropertyInfo(expression));
+            this.primaryKeys.Add(typeof(T), ExpressionUtility.GetPropertyInfo(expression));
         }
 
         /// <summary>
@@ -62,7 +61,7 @@ namespace DataGenerator
             where TThis : class
             where TForeign : class
         {
-            this.foreignKeys.Add(new Tuple<Type, Type>(typeof(TThis), typeof(TForeign)), this.GetPropertyInfo(expression));
+            this.foreignKeys.Add(new Tuple<Type, Type>(typeof(TThis), typeof(TForeign)), ExpressionUtility.GetPropertyInfo(expression));
         }
 
         /// <summary>
@@ -72,9 +71,7 @@ namespace DataGenerator
         /// <returns></returns>
         public PropertyInfo[] GetPrimaryKeys(Type t)
         {
-            PropertyInfo[] result;
-
-            if (!this.primaryKeys.TryGetValue(t, out result))
+            if (!this.primaryKeys.TryGetValue(t, out var result))
             {
                 var key = t.GetProperty("Id");
 
@@ -99,10 +96,9 @@ namespace DataGenerator
         /// <returns></returns>
         public PropertyInfo[] GetForeignKeys(Type tThis, Type tForeign)
         {
-            PropertyInfo[] result;
-
             var key = new Tuple<Type, Type>(tThis, tForeign);
-            if (!this.foreignKeys.TryGetValue(key, out result))
+
+            if (!this.foreignKeys.TryGetValue(key, out var result))
             {
                 var foreign = tThis.GetProperty(TrimTypeName(tForeign.Name) + "Id");
 
@@ -110,7 +106,9 @@ namespace DataGenerator
                 {
                     throw new InvalidOperationException($@"Unable to determine foreign key for type '{tThis.Name}' to '{tForeign.Name}'.");
                 }
+
                 result = new[] { foreign };
+
                 this.foreignKeys.Add(key, result);
             }
 
@@ -150,40 +148,6 @@ namespace DataGenerator
             }
 
             return input;
-        }
-
-        private PropertyInfo[] GetPropertyInfo<T>(Expression<Func<T, object>> expression)
-            where T : class
-        {
-            var body = expression.Body;
-            var ue = body as UnaryExpression;
-            if (ue != null && ue.NodeType == ExpressionType.Convert)
-            {
-                body = ue.Operand;
-            }
-
-            NewExpression ne;
-            MemberExpression me;
-            if ((ne = body as NewExpression) != null)
-            {
-                var mes = ne.Arguments.Select(a => a as MemberExpression).ToArray();
-
-                if (mes.All(t => t != null))
-                {
-                    return mes.Select(a => a.Member as PropertyInfo).ToArray();
-                }
-            }
-            else if ((me = body as MemberExpression) != null)
-            {
-                var pi = me.Member as PropertyInfo;
-
-                if (pi != null)
-                {
-                    return new[] { pi };
-                }
-            }
-
-            throw new InvalidOperationException("Unsupported expression.");
         }
     }
 }

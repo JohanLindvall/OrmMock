@@ -1,0 +1,79 @@
+﻿// Copyright(c) 2017 Johan Lindvall
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+namespace DataGenerator
+{
+    using System;
+    using System.Collections.Generic;
+    using System.Reflection;
+
+    public class Structure
+    {
+        /// <summary>
+        /// Gets the set of properties to exclude.
+        /// </summary>
+        public HashSet<PropertyInfo> WithoutProperty { get; } = new HashSet<PropertyInfo>();
+
+        /// <summary>
+        /// Gets the set of types to exclude.
+        /// </summary>
+        public HashSet<Type> WithoutType { get; } = new HashSet<Type>();
+
+        /// <summary>
+        /// Holds the hashset of properties for which ancestry should be ignored..
+        /// </summary>
+        public HashSet<PropertyInfo> WithoutAncestryForProperty { get; } = new HashSet<PropertyInfo>();
+
+        /// <summary>
+        /// Holds the hashset of types for which ancestry should be ignored.
+        /// </summary>
+        public HashSet<Type> WithoutAncestryForType { get; } = new HashSet<Type>();
+
+        /// <summary>
+        /// Holds the hashset of types for which ancestry should be ignored when create constructor arguments.
+        /// </summary>
+        public HashSet<Type> WithoutAncestryForConstructor { get; } = new HashSet<Type>();
+
+        /// <summary>
+        /// Holds the dictionary of navigation properties to include and the count of items to create.
+        /// </summary>
+        public Dictionary<PropertyInfo, int> Include { get; } = new Dictionary<PropertyInfo, int>();
+
+        /// <summary>
+        /// Holds the dictionary of singleton types.
+        /// </summary>
+        public HashSet<Type> Singletons { get; } = new HashSet<Type>();
+
+        /// <summary>
+        /// Holds the dictionary of custom property setters.
+        /// </summary>
+        public Dictionary<PropertyInfo, Func<object, object>> CustomPropertySetters { get; } = new Dictionary<PropertyInfo, Func<object, object>>();
+
+        /// <summary>
+        /// Holds the dictionary of custom constructors.
+        /// </summary>
+        public Dictionary<Type, Func<object>> CustomConstructors { get; } = new Dictionary<Type, Func<object>>();
+
+        /// <summary>
+        /// Holds the relations
+        /// </summary>
+        public Relations Relations { get; } = new Relations();
+    }
+}
