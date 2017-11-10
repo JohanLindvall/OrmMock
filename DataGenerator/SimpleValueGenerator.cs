@@ -42,6 +42,12 @@ namespace DataGenerator
         /// <returns>True if a value was created, false otherwise.</returns>
         public bool TryCreateValue(Type t, string propertyName, out object result)
         {
+            if (t.IsClass && t != typeof(string))
+            {
+                result = null;
+                return false;
+            }
+
             if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>))
             {
                 if (this.Random.Next(0, 1) == 0)
