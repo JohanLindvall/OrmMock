@@ -91,6 +91,21 @@ namespace DataGenerator
         }
 
         /// <summary>
+        /// Registers a 1:1 relation between TThis and TForeign.
+        /// </summary>
+        /// <typeparam name="TThis">The first object type.</typeparam>
+        /// <typeparam name="TForeign">The second object type.</typeparam>
+        /// <param name="expression1">The expression defining the foreign keys of the first object.</param>
+        /// <param name="expression2">The expression defining the foreign keys of the second object.</param>
+        public void Register11Relation<TThis, TForeign>(Expression<Func<TThis, object>> expression1, Expression<Func<TForeign, object>> expression2)
+            where TThis : class
+            where TForeign : class
+        {
+            this.RegisterForeignKeys<TThis, TForeign>(expression1);
+            this.RegisterForeignKeys<TForeign, TThis>(expression2);
+        }
+
+        /// <summary>
         /// Gets the primary key properties for a given type.
         /// </summary>
         /// <param name="t">The type of the object.</param>
