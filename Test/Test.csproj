@@ -50,6 +50,7 @@
   <ItemGroup>
     <Compile Include="MemDbTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SimpleValueGeneratorTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

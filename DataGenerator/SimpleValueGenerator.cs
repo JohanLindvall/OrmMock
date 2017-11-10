@@ -64,17 +64,33 @@ namespace DataGenerator
             {
                 result = propertyName + BitConverter.ToString(Enumerable.Range(0, 20).Select(_ => (byte)this.Random.Next(0, 255)).ToArray()).Replace("-", string.Empty);
             }
+            else if (t == typeof(byte))
+            {
+                result = (byte)this.Random.Next(byte.MinValue, byte.MaxValue);
+            }
             else if (t == typeof(short))
             {
                 result = (short)this.Random.Next(short.MinValue, short.MaxValue);
+            }
+            else if (t == typeof(ushort))
+            {
+                result = (ushort)this.Random.Next(ushort.MinValue, ushort.MaxValue);
             }
             else if (t == typeof(int))
             {
                 result = this.Random.Next(int.MinValue, int.MaxValue);
             }
+            else if (t == typeof(uint))
+            {
+                result = (uint)this.Random.Next(int.MinValue, int.MaxValue);
+            }
             else if (t == typeof(long))
             {
                 result = BitConverter.ToInt64(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray(), 0);
+            }
+            else if (t == typeof(ulong))
+            {
+                result = BitConverter.ToUInt64(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray(), 0);
             }
             else if (t == typeof(double))
             {
