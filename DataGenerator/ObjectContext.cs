@@ -377,7 +377,7 @@ namespace DataGenerator
 
                                 if (!this.structure.Include.TryGetValue(p, out int elementCount))
                                 {
-                                    elementCount = this.objectCount == 1 ? this.RootCollectionMembers : this.NonRootCollectionMembers;
+                                    elementCount = sources.Count == 1 ? this.RootCollectionMembers : this.NonRootCollectionMembers;
                                 }
 
                                 for (var i = 0; i < elementCount; ++i)
@@ -395,12 +395,12 @@ namespace DataGenerator
                     {
                         // Going from t to pt
                         // Note that primary keys and foreign keys may be equal.
-                        var foreignKeyProps = this.structure.Relations.GetForeignKeys(t, pt.GetElementType());
+                        var foreignKeyProps = this.structure.Relations.GetForeignKeys(t, pt);
                         var primaryKeyProps = this.structure.Relations.GetPrimaryKeys(t);
 
                         if (foreignKeyProps == null)
                         {
-                            throw new InvalidOperationException($@"Unable to determine foreign keys from '{t.Name}' to '{pt.GetElementType().Name}'.");
+                            throw new InvalidOperationException($@"Unable to determine foreign keys from '{t.Name}' to '{pt.Name}'.");
                         }
 
                         if (primaryKeyProps == null)

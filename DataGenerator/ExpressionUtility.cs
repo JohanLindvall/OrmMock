@@ -25,8 +25,18 @@ namespace DataGenerator
     using System.Linq.Expressions;
     using System.Reflection;
 
+    /// <summary>
+    /// Defines methods for extracting property info from expressions.
+    /// </summary>
     public static class ExpressionUtility
     {
+        /// <summary>
+        /// Extracts property info from the given expression.
+        /// </summary>
+        /// <typeparam name="T">The type of the object in the expression</typeparam>
+        /// <typeparam name="T2">The type of the property in the expression.</typeparam>
+        /// <param name="expression">The expression.</param>
+        /// <returns>An array of property infos.</returns>
         public static PropertyInfo[] GetPropertyInfo<T, T2>(Expression<Func<T, T2>> expression)
             where T : class
         {

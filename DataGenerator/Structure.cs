@@ -24,6 +24,9 @@ namespace DataGenerator
     using System.Collections.Generic;
     using System.Reflection;
 
+    /// <summary>
+    /// Defines structural information for the data generator.
+    /// </summary>
     public class Structure
     {
         /// <summary>

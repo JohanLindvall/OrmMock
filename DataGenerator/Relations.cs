@@ -22,6 +22,7 @@ namespace DataGenerator
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
 
@@ -50,7 +51,7 @@ namespace DataGenerator
 
             this.DefaultForeignKey = (thisType, foreignType) =>
             {
-                var property = thisType.GetProperty(TrimTypeName(foreignType.Name) + "Id");
+                var property = thisType.GetProperty(thisType.GetProperties().Single(p => p.PropertyType == foreignType).Name + "Id");
                 return property == null ? null : new[] { property };
             };
         }
@@ -145,7 +146,7 @@ namespace DataGenerator
             {
                 for (var i = 0; i < result.Length; ++i)
                 {
-                    if (!object.ReferenceEquals(result[i], primary[i]))
+                    if (!object.ReferenceEquals(Nullable.GetUnderlyingType(result[i].PropertyType) ?? result[i].PropertyType, primary[i].PropertyType))
                     {
                         mismatch = true;
                         break;
@@ -159,16 +160,6 @@ namespace DataGenerator
             }
 
             return result;
-        }
-
-        private static string TrimTypeName(string input)
-        {
-            if (input.StartsWith("Db", StringComparison.Ordinal))
-            {
-                return input.Substring(2);
-            }
-
-            return input;
         }
     }
 }

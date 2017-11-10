@@ -145,7 +145,7 @@ namespace DataGenerator
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(e))
             {
-                this.structure.CustomPropertySetters.Add(property, o => (object)value((T)o));
+                this.structure.CustomPropertySetters.Add(property, o => value((T)o));
             }
 
             return this;
