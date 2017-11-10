@@ -26,6 +26,9 @@ namespace DataGenerator
     using System.Linq.Expressions;
     using System.Reflection;
 
+    /// <summary>
+    /// Defines an object context containing the created object.
+    /// </summary>
     public class ObjectContext
     {
         /// <summary>
