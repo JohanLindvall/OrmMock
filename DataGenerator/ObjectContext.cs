@@ -208,10 +208,14 @@ namespace DataGenerator
             }
         }
 
+        /// <summary>
+        /// Creates an object of type t, considering the sources for references.
+        /// </summary>
+        /// <param name="t">The type of the object to create.</param>
+        /// <param name="sources">The sources.</param>
+        /// <returns></returns>
         private object CreateObject(Type t, IList<object> sources)
         {
-            var registerSingleton = this.structure.Singletons.Contains(t);
-
             if (this.singletons.TryGetValue(t, out object singleton))
             {
                 // Register possible back references in singleton.
@@ -259,7 +263,7 @@ namespace DataGenerator
 
             sources.RemoveAt(sources.Count - 1);
 
-            if (registerSingleton)
+            if (this.structure.Singletons.Contains(t))
             {
                 this.singletons[t] = result;
             }
@@ -435,8 +439,6 @@ namespace DataGenerator
                                 throw new InvalidOperationException($"Ambiguous property for singleton {t.Name}.{p.Name}.");
                             }
                         }
-
-                        // Validate that keys match in length and types?
 
                         // Set foreign keys to primary keys of related object.
                         for (var i = 0; i < foreignKeyProps.Length; ++i)

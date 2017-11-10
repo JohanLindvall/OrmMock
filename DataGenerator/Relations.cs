@@ -40,6 +40,31 @@ namespace DataGenerator
         /// </summary>
         private readonly Dictionary<Tuple<Type, Type>, PropertyInfo[]> foreignKeys = new Dictionary<Tuple<Type, Type>, PropertyInfo[]>();
 
+        public Relations()
+        {
+            this.DefaultPrimaryKey = type =>
+            {
+                var property = type.GetProperty("Id");
+                return property == null ? null : new[] { property };
+            };
+
+            this.DefaultForeignKey = (thisType, foreignType) =>
+            {
+                var property = thisType.GetProperty(TrimTypeName(foreignType.Name) + "Id");
+                return property == null ? null : new[] { property };
+            };
+        }
+
+        /// <summary>
+        /// Gets or set the function used to get the default primary key.
+        /// </summary>
+        public Func<Type, PropertyInfo[]> DefaultPrimaryKey { get; set; }
+
+        /// <summary>
+        /// Gets or set the function used to get the default foreign key.
+        /// </summary>
+        public Func<Type, Type, PropertyInfo[]> DefaultForeignKey { get; set; }
+
         /// <summary>
         /// Registers an expression defining the primary keys of an object.
         /// </summary>
@@ -73,14 +98,12 @@ namespace DataGenerator
         {
             if (!this.primaryKeys.TryGetValue(t, out var result))
             {
-                var key = t.GetProperty("Id");
+                result = this.DefaultPrimaryKey(t);
 
-                if (key == null)
+                if (result == null)
                 {
                     throw new InvalidOperationException($@"Unable to determine key for type '{t.Name}'.");
                 }
-
-                result = new[] { key };
 
                 this.primaryKeys.Add(t, result);
             }
@@ -92,7 +115,7 @@ namespace DataGenerator
         /// Gets the primary key properties for a given type.
         /// </summary>
         /// <param name="tThis">The type of this object.</param>
-        /// <param name="tForeign">The type of the foreign object..</param>
+        /// <param name="tForeign">The type of the foreign object.</param>
         /// <returns></returns>
         public PropertyInfo[] GetForeignKeys(Type tThis, Type tForeign)
         {
@@ -100,14 +123,12 @@ namespace DataGenerator
 
             if (!this.foreignKeys.TryGetValue(key, out var result))
             {
-                var foreign = tThis.GetProperty(TrimTypeName(tForeign.Name) + "Id");
+                result = this.DefaultForeignKey(tThis, tForeign);
 
-                if (foreign == null)
+                if (result == null)
                 {
                     throw new InvalidOperationException($@"Unable to determine foreign key for type '{tThis.Name}' to '{tForeign.Name}'.");
                 }
-
-                result = new[] { foreign };
 
                 this.foreignKeys.Add(key, result);
             }
