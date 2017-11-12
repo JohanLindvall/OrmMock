@@ -42,93 +42,110 @@ namespace DataGenerator
         /// <returns>True if a value was created, false otherwise.</returns>
         public bool TryCreateValue(Type t, string propertyName, out object result)
         {
-            if (t.IsClass && t != typeof(string))
+            var creator = ValueCreator(t);
+            if (creator == null)
             {
                 result = null;
                 return false;
             }
+            else
+            {
+                result = creator(propertyName);
+                return true;
+            }
+        }
 
+        /// <summary>
+        /// Returns a value creating delegate for the given type.
+        /// </summary>
+        /// <param name="t">The type for which to create values.</param>
+        /// <returns></returns>
+        public Func<string, object> ValueCreator(Type t)
+        {
             if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>))
             {
-                if (this.Random.Next(0, 1) == 0)
+                t = Nullable.GetUnderlyingType(t);
+                var inner = ValueCreator(t);
+                if (inner == null)
                 {
-                    result = null;
-                    return true;
+                    return null;
                 }
-                else
+
+                return s =>
                 {
-                    t = Nullable.GetUnderlyingType(t);
-                }
+                    if (this.Random.Next(0, 1) == 0)
+                    {
+                        return null;
+                    }
+                    else
+                    {
+                        return inner(s);
+                    }
+                };
             }
 
             if (t.IsEnum)
             {
                 var values = Enum.GetValues(t);
-                result = values.GetValue(this.Random.Next(0, values.Length - 1));
+                return _ => values.GetValue(this.Random.Next(0, values.Length - 1));
             }
             else if (t == typeof(string))
             {
-                result = propertyName + BitConverter.ToString(Enumerable.Range(0, 20).Select(_ => (byte)this.Random.Next(0, 255)).ToArray()).Replace("-", string.Empty);
+                return s => s + BitConverter.ToString(Enumerable.Range(0, 20).Select(_ => (byte)this.Random.Next(0, 255)).ToArray()).Replace("-", string.Empty);
             }
             else if (t == typeof(byte))
             {
-                result = (byte)this.Random.Next(byte.MinValue, byte.MaxValue);
+                return _ => (byte)this.Random.Next(byte.MinValue, byte.MaxValue);
             }
             else if (t == typeof(short))
             {
-                result = (short)this.Random.Next(short.MinValue, short.MaxValue);
+                return _ => (short)this.Random.Next(short.MinValue, short.MaxValue);
             }
             else if (t == typeof(ushort))
             {
-                result = (ushort)this.Random.Next(ushort.MinValue, ushort.MaxValue);
+                return _ => (ushort)this.Random.Next(ushort.MinValue, ushort.MaxValue);
             }
             else if (t == typeof(int))
             {
-                result = this.Random.Next(int.MinValue, int.MaxValue);
+                return _ => this.Random.Next(int.MinValue, int.MaxValue);
             }
             else if (t == typeof(uint))
             {
-                result = (uint)this.Random.Next(int.MinValue, int.MaxValue);
+                return _ => (uint)this.Random.Next(int.MinValue, int.MaxValue);
             }
             else if (t == typeof(long))
             {
-                result = BitConverter.ToInt64(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray(), 0);
+                return __ => BitConverter.ToInt64(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray(), 0);
             }
             else if (t == typeof(ulong))
             {
-                result = BitConverter.ToUInt64(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray(), 0);
+                return __ => BitConverter.ToUInt64(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray(), 0);
             }
             else if (t == typeof(double))
             {
-                result = (this.Random.NextDouble() - 0.5) * double.MaxValue;
+                return _ => (this.Random.NextDouble() - 0.5) * double.MaxValue;
             }
             else if (t == typeof(float))
             {
-                result = (float)(this.Random.NextDouble() - 0.5) * float.MaxValue;
+                return _ => (float)(this.Random.NextDouble() - 0.5) * float.MaxValue;
             }
             else if (t == typeof(decimal))
             {
-                result = (decimal)(this.Random.NextDouble() - 0.5) * 1e2m; // TODO look into overflows?
+                return _ => (decimal)(this.Random.NextDouble() - 0.5) * 1e2m; // TODO look into overflows?
             }
             else if (t == typeof(bool))
             {
-                result = this.Random.Next(0, 1) == 1;
+                return _ => this.Random.Next(0, 1) == 1;
             }
             else if (t == typeof(Guid))
             {
-                result = new Guid(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray());
+                return __ => new Guid(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray());
             }
             else if (t == typeof(DateTimeOffset))
             {
-                result = DateTimeOffset.Now + TimeSpan.FromMilliseconds((this.Random.NextDouble() - 0.5) * 62e9);
+                return _ => DateTimeOffset.Now + TimeSpan.FromMilliseconds((this.Random.NextDouble() - 0.5) * 62e9);
             }
-            else
-            {
-                result = null;
-                return false;
-            }
-
-            return true;
+            return null;
         }
     }
 }
