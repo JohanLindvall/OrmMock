@@ -344,6 +344,8 @@ namespace DataGenerator
                                 property.SetMethod.Invoke(currentObject, new[] { valueFunc(currentObject) });
                             }
                         });
+
+                        continue;
                     }
 
                     var setter = this.ValueCreator(propertyType);
