@@ -386,16 +386,23 @@ namespace DataGenerator
                                 }
 
                                 var elementType = propertyType.GetGenericArguments()[0];
+                                var collectionType = typeof(HashSet<>).MakeGenericType(elementType);
+                                var hashSetAdd = collectionType.GetMethod("Add");
 
                                 methods.Add((currentObject, currentSources, currentSingleton) =>
                                 {
                                     var collection = property.GetMethod.Invoke(currentObject, new object[0]);
+                                    MethodInfo add;
                                     if (collection == null)
                                     {
-                                        collection = Activator.CreateInstance(typeof(HashSet<>).MakeGenericType(elementType));
+                                        collection = Activator.CreateInstance(collectionType);
                                         p.SetMethod.Invoke(currentObject, new[] { collection });
+                                        add = hashSetAdd;
                                     }
-                                    var add = collection.GetType().GetMethod("Add");
+                                    else
+                                    {
+                                        add = collection.GetType().GetMethod("Add");
+                                    }
                                     var source = noSources ? null : GetSource(currentSources, elementType);
                                     if (source != null)
                                     {

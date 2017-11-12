@@ -91,7 +91,12 @@ namespace DataGenerator
             }
             else if (t == typeof(string))
             {
-                return s => s + BitConverter.ToString(Enumerable.Range(0, 20).Select(_ => (byte)this.Random.Next(0, 255)).ToArray()).Replace("-", string.Empty);
+                return s =>
+                {
+                    var rnd = new byte[21];
+                    this.Random.NextBytes(rnd);
+                    return s + Convert.ToBase64String(rnd);
+                };
             }
             else if (t == typeof(byte))
             {
@@ -115,11 +120,21 @@ namespace DataGenerator
             }
             else if (t == typeof(long))
             {
-                return __ => BitConverter.ToInt64(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray(), 0);
+                return _ =>
+                {
+                    var rnd = new byte[8];
+                    this.Random.NextBytes(rnd);
+                    return BitConverter.ToInt64(rnd, 0);
+                };
             }
             else if (t == typeof(ulong))
             {
-                return __ => BitConverter.ToUInt64(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray(), 0);
+                return _ =>
+                {
+                    var rnd = new byte[8];
+                    this.Random.NextBytes(rnd);
+                    return BitConverter.ToUInt64(rnd, 0);
+                };
             }
             else if (t == typeof(double))
             {
@@ -139,7 +154,12 @@ namespace DataGenerator
             }
             else if (t == typeof(Guid))
             {
-                return __ => new Guid(Enumerable.Range(0, 16).Select(_ => (byte)this.Random.Next(0, 255)).ToArray());
+                return s =>
+                {
+                    var rnd = new byte[16];
+                    this.Random.NextBytes(rnd);
+                    return new Guid(rnd);
+                };
             }
             else if (t == typeof(DateTimeOffset))
             {
