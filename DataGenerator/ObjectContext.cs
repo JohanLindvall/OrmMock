@@ -47,6 +47,11 @@ namespace DataGenerator
         private readonly Dictionary<Type, object> singletons = new Dictionary<Type, object>();
 
         /// <summary>
+        /// Holds the method property cache.
+        /// </summary>
+        private readonly Dictionary<Type, List<Action<object, IList<object>, bool>>> methodPropertyCache = new Dictionary<Type, List<Action<object, IList<object>, bool>>>();
+
+        /// <summary>
         /// Holds the structure data.
         /// </summary>
         private readonly Structure structure;
@@ -222,7 +227,7 @@ namespace DataGenerator
             if (this.singletons.TryGetValue(t, out object singleton))
             {
                 // Register possible back references in singleton.
-                this.SetProperties(singleton, sources, true);
+                this.SetProperties(singleton, t, sources, true);
 
                 return singleton;
             }
@@ -262,7 +267,7 @@ namespace DataGenerator
 
             this.createdObjects.Add(result);
 
-            this.SetProperties(result, sources, false);
+            this.SetProperties(result, t, sources, false);
 
             sources.RemoveAt(sources.Count - 1);
 
@@ -285,6 +290,17 @@ namespace DataGenerator
             return this.SimpleValueGenerator.TryCreateValue(t, prefix, out result);
         }
 
+
+        private Func<string, object> ValueCreator(Type t)
+        {
+            if (this.structure.CustomConstructors.TryGetValue(t, out Func<object> creator))
+            {
+                return _ => creator();
+            }
+
+            return this.SimpleValueGenerator.ValueCreator(t);
+        }
+
         private object GetSource(IList<object> sources, Type sourceType)
         {
             for (var i = sources.Count - 2; i >= 0; --i)
@@ -298,160 +314,194 @@ namespace DataGenerator
             return null;
         }
 
-        private void SetProperties(object o, IList<object> sources, bool singleton)
+        private void SetProperties(object inputObject, Type inputType, IList<object> inputSources, bool inputSingleton)
         {
-            var t = o.GetType();
-            var referenceProperties = new List<PropertyInfo>();
-
-            foreach (var p in t.GetProperties())
+            if (!this.methodPropertyCache.TryGetValue(inputType, out var methods))
             {
-                if (this.structure.CustomPropertySetters.TryGetValue(p, out Func<object, object> valueFunc))
+                methods = new List<Action<object, IList<object>, bool>>();
+
+                var referenceProperties = new List<PropertyInfo>();
+                var propertyPlacement = new Dictionary<PropertyInfo, int>();
+
+                foreach (var p in inputType.GetProperties())
                 {
-                    if (!singleton)
+                    var property = p;
+                    var propertyType = property.PropertyType;
+
+                    if (this.structure.WithoutProperty.Contains(property) || this.structure.WithoutType.Contains(propertyType))
                     {
-                        p.SetMethod.Invoke(o, new[] { valueFunc(o) });
+                        // add nothing to methods.
+                        continue;
                     }
 
-                    continue;
-                }
-
-                if (this.structure.WithoutProperty.Contains(p))
-                {
-                    continue;
-                }
-
-                var pt = p.PropertyType;
-
-                if (this.structure.WithoutType.Contains(pt))
-                {
-                    continue;
-                }
-
-                if (this.TryCreateValue(pt, p.Name, out object val))
-                {
-                    if (!singleton)
+                    if (this.structure.CustomPropertySetters.TryGetValue(property, out Func<object, object> valueFunc))
                     {
-                        p.SetMethod.Invoke(o, new[] { val });
-                    }
-                }
-                else
-                {
-                    referenceProperties.Add(p);
-                }
-            }
-
-            for (var pass = 1; pass <= 2; ++pass)
-            {
-                // Pass 1, update pk id for 1:1 relation.
-                // Pass 2, the rest.
-                foreach (var p in referenceProperties)
-                {
-                    var noSources = this.structure.WithoutAncestryForType.Contains(t) || this.structure.WithoutAncestryForProperty.Contains(p);
-                    var pt = p.PropertyType;
-
-                    if (pt.IsGenericType)
-                    {
-                        if (pt.GetGenericTypeDefinition() == typeof(ICollection<>))
+                        propertyPlacement.Add(property, methods.Count);
+                        methods.Add((currentObject, _, currentSingleton) =>
                         {
-                            if (pass != 2)
+                            if (!currentSingleton)
                             {
-                                continue;
+                                property.SetMethod.Invoke(currentObject, new[] { valueFunc(currentObject) });
                             }
+                        });
+                    }
 
-                            var elementType = pt.GetGenericArguments()[0];
-                            var collection = p.GetMethod.Invoke(o, new object[0]);
-                            if (collection == null)
+                    var setter = this.ValueCreator(propertyType);
+                    if (setter != null)
+                    {
+                        propertyPlacement.Add(property, methods.Count);
+                        methods.Add((currentObject, _, currentSingleton) =>
+                        {
+                            if (!currentSingleton)
                             {
-                                collection = Activator.CreateInstance(typeof(HashSet<>).MakeGenericType(elementType));
-                                p.SetMethod.Invoke(o, new[] { collection });
+                                property.SetMethod.Invoke(currentObject, new[] { setter(property.Name) });
                             }
-                            var add = collection.GetType().GetMethod("Add");
-                            var source = noSources ? null : GetSource(sources, elementType);
-                            if (source != null)
+                        });
+                    }
+                    else
+                    {
+                        referenceProperties.Add(property);
+                    }
+                }
+
+                for (var pass = 1; pass <= 2; ++pass)
+                {
+                    // Pass 1, update pk id for 1:1 relation.
+                    // Pass 2, the rest.
+                    foreach (var p in referenceProperties)
+                    {
+                        var property = p;
+                        var propertyType = property.PropertyType;
+                        var noSources = this.structure.WithoutAncestryForType.Contains(inputType) || this.structure.WithoutAncestryForProperty.Contains(property);
+
+                        if (propertyType.IsGenericType)
+                        {
+                            if (propertyType.GetGenericTypeDefinition() == typeof(ICollection<>))
                             {
-                                add.Invoke(collection, new[] { source });
-                            }
-                            else
-                            {
-                                if (singleton)
+                                if (pass != 2)
                                 {
                                     continue;
                                 }
 
-                                if (!this.structure.Include.TryGetValue(p, out int elementCount))
-                                {
-                                    elementCount = sources.Count == 1 ? this.RootCollectionMembers : this.NonRootCollectionMembers;
-                                }
+                                var elementType = propertyType.GetGenericArguments()[0];
 
-                                for (var i = 0; i < elementCount; ++i)
+                                methods.Add((currentObject, currentSources, currentSingleton) =>
                                 {
-                                    add.Invoke(collection, new[] { CreateObject(elementType, sources) });
-                                }
+                                    var collection = property.GetMethod.Invoke(currentObject, new object[0]);
+                                    if (collection == null)
+                                    {
+                                        collection = Activator.CreateInstance(typeof(HashSet<>).MakeGenericType(elementType));
+                                        p.SetMethod.Invoke(currentObject, new[] { collection });
+                                    }
+                                    var add = collection.GetType().GetMethod("Add");
+                                    var source = noSources ? null : GetSource(currentSources, elementType);
+                                    if (source != null)
+                                    {
+                                        add.Invoke(collection, new[] { source });
+                                    }
+                                    else
+                                    {
+                                        if (currentSingleton)
+                                        {
+                                            return;
+                                        }
+
+                                        if (!this.structure.Include.TryGetValue(property, out int elementCount))
+                                        {
+                                            elementCount = inputSources.Count == 1 ? this.RootCollectionMembers : this.NonRootCollectionMembers;
+                                        }
+
+                                        for (var i = 0; i < elementCount; ++i)
+                                        {
+                                            add.Invoke(collection, new[] { CreateObject(elementType, currentSources) });
+                                        }
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                throw new InvalidOperationException("Unsupported type");
                             }
                         }
                         else
                         {
-                            throw new InvalidOperationException("Unsupported type");
-                        }
-                    }
-                    else
-                    {
-                        // Going from t to pt
-                        // Note that primary keys and foreign keys may be equal.
-                        var foreignKeyProps = this.structure.Relations.GetForeignKeys(t, pt);
-                        var primaryKeyProps = this.structure.Relations.GetPrimaryKeys(t);
+                            // Going from t to pt
+                            // Note that primary keys and foreign keys may be equal.
+                            var foreignKeyProps = this.structure.Relations.GetForeignKeys(inputType, propertyType);
+                            var primaryKeyProps = this.structure.Relations.GetPrimaryKeys(inputType);
 
-                        if (foreignKeyProps == null)
-                        {
-                            throw new InvalidOperationException($@"Unable to determine foreign keys from '{t.Name}' to '{pt.Name}'.");
-                        }
+                            if (foreignKeyProps == null)
+                            {
+                                throw new InvalidOperationException($@"Unable to determine foreign keys from '{inputType.Name}' to '{propertyType.Name}'.");
+                            }
 
-                        if (primaryKeyProps == null)
-                        {
-                            throw new InvalidOperationException($@"Unable to determine primary keys for '{t.Name}'.");
-                        }
+                            if (primaryKeyProps == null)
+                            {
+                                throw new InvalidOperationException($@"Unable to determine primary keys for '{inputType.Name}'.");
+                            }
 
-                        // Pass 1, handle the case where the foreign key props and the primary key props are equal in pass 1 only.
-                        if (foreignKeyProps.SequenceEqual(primaryKeyProps))
-                        {
-                            if (pass == 2)
+                            // Pass 1, only handle the case where the foreign key props and the primary key props are equal.
+                            if (foreignKeyProps.SequenceEqual(primaryKeyProps))
+                            {
+                                if (pass == 2)
+                                {
+                                    continue;
+                                }
+                            }
+                            else if (pass == 1)
                             {
                                 continue;
                             }
-                        }
-                        else if (pass == 1)
-                        {
-                            continue;
-                        }
 
-                        var foreignObject = (noSources ? null : GetSource(sources, pt)) ?? this.CreateObject(pt, sources);
+                            var primaryKeysOfForeignObject = this.structure.Relations.GetPrimaryKeys(propertyType);
 
-                        var primaryKeysOfForeignObject = this.structure.Relations.GetPrimaryKeys(foreignObject.GetType());
-
-                        if (primaryKeysOfForeignObject == null)
-                        {
-                            throw new InvalidOperationException($@"Unable to determine primary keys for '{foreignObject.GetType().Name}'.");
-                        }
-
-                        if (singleton)
-                        {
-                            var existing = p.GetMethod.Invoke(o, new object[0]);
-
-                            if (foreignObject != existing && existing != null)
+                            if (primaryKeysOfForeignObject == null)
                             {
-                                throw new InvalidOperationException($"Ambiguous property for singleton {t.Name}.{p.Name}.");
+                                throw new InvalidOperationException($@"Unable to determine primary keys for '{propertyType.Name}'.");
+                            }
+
+                            methods.Add((currentObject, currentSources, currentSingleton) =>
+                            {
+                                var foreignObject = (noSources ? null : GetSource(currentSources, propertyType)) ?? this.CreateObject(propertyType, currentSources);
+
+                                if (currentSingleton)
+                                {
+                                    var existing = property.GetMethod.Invoke(currentObject, new object[0]);
+
+                                    if (!object.ReferenceEquals(foreignObject, existing) && existing != null)
+                                    {
+                                        throw new InvalidOperationException($"Ambiguous property for singleton {inputType.Name}.{p.Name}.");
+                                    }
+                                }
+
+                                // Set foreign keys to primary keys of related object.
+                                for (var i = 0; i < foreignKeyProps.Length; ++i)
+                                {
+                                    foreignKeyProps[i].SetMethod.Invoke(currentObject, new[] { primaryKeysOfForeignObject[i].GetMethod.Invoke(foreignObject, new object[0]) });
+                                }
+
+                                property.SetMethod.Invoke(currentObject, new[] { foreignObject });
+                            });
+
+                            foreach (var foreignKeyProp in foreignKeyProps)
+                            {
+                                if (propertyPlacement.TryGetValue(foreignKeyProp, out var methodIndex))
+                                {
+                                    methods[methodIndex] = null;
+                                }
                             }
                         }
-
-                        // Set foreign keys to primary keys of related object.
-                        for (var i = 0; i < foreignKeyProps.Length; ++i)
-                        {
-                            foreignKeyProps[i].SetMethod.Invoke(o, new[] { primaryKeysOfForeignObject[i].GetMethod.Invoke(foreignObject, new object[0]) });
-                        }
-
-                        p.SetMethod.Invoke(o, new[] { foreignObject });
                     }
                 }
+
+                methods = methods.Where(method => method != null).ToList();
+
+                this.methodPropertyCache.Add(inputType, methods);
+            }
+
+            foreach (var method in methods)
+            {
+                method(inputObject, inputSources, inputSingleton);
             }
         }
     }
