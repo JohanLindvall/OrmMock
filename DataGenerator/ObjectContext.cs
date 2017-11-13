@@ -26,6 +26,8 @@ namespace DataGenerator
     using System.Linq.Expressions;
     using System.Reflection;
 
+    using Fasterflect;
+
     /// <summary>
     /// Defines an object context containing the created object.
     /// </summary>
@@ -337,11 +339,12 @@ namespace DataGenerator
                     if (this.structure.CustomPropertySetters.TryGetValue(property, out Func<object, object> valueFunc))
                     {
                         propertyPlacement.Add(property, methods.Count);
+                        var setterDelegate = inputType.DelegateForSetPropertyValue(property.Name);
                         methods.Add((currentObject, _, currentSingleton) =>
                         {
                             if (!currentSingleton)
                             {
-                                property.SetMethod.Invoke(currentObject, new[] { valueFunc(currentObject) });
+                                setterDelegate(currentObject, valueFunc(currentObject));
                             }
                         });
 
@@ -352,11 +355,12 @@ namespace DataGenerator
                     if (setter != null)
                     {
                         propertyPlacement.Add(property, methods.Count);
+                        var setterDelegate = inputType.DelegateForSetPropertyValue(property.Name);
                         methods.Add((currentObject, _, currentSingleton) =>
                         {
                             if (!currentSingleton)
                             {
-                                property.SetMethod.Invoke(currentObject, new[] { setter(property.Name) });
+                                setterDelegate(currentObject, setter(property.Name));
                             }
                         });
                     }
@@ -387,26 +391,35 @@ namespace DataGenerator
 
                                 var elementType = propertyType.GetGenericArguments()[0];
                                 var collectionType = typeof(HashSet<>).MakeGenericType(elementType);
-                                var hashSetAdd = collectionType.GetMethod("Add");
+                                var hashSetAdder = collectionType.DelegateForCallMethod("Add", elementType);
+                                var hashSetCreator = collectionType.DelegateForCreateInstance();
+                                var collectionSetter = inputType.DelegateForSetPropertyValue(property.Name);
+                                var collectionGetter = inputType.DelegateForGetPropertyValue(property.Name);
 
                                 methods.Add((currentObject, currentSources, currentSingleton) =>
                                 {
-                                    var collection = property.GetMethod.Invoke(currentObject, new object[0]);
-                                    MethodInfo add;
+                                    var collection = collectionGetter(currentObject);
+                                    var adder = hashSetAdder;
                                     if (collection == null)
                                     {
-                                        collection = Activator.CreateInstance(collectionType);
-                                        p.SetMethod.Invoke(currentObject, new[] { collection });
-                                        add = hashSetAdd;
+                                        collection = hashSetCreator();
+                                        collectionSetter(currentObject, collection);
                                     }
                                     else
                                     {
-                                        add = collection.GetType().GetMethod("Add");
+                                        var existingCollectionType = collection.GetType();
+
+                                        if (existingCollectionType != collectionType)
+                                        {
+                                            adder = collection.GetType().DelegateForCallMethod("Add", elementType);
+                                        }
                                     }
+
                                     var source = noSources ? null : GetSource(currentSources, elementType);
+
                                     if (source != null)
                                     {
-                                        add.Invoke(collection, new[] { source });
+                                        adder(collection, source);
                                     }
                                     else
                                     {
@@ -422,7 +435,7 @@ namespace DataGenerator
 
                                         for (var i = 0; i < elementCount; ++i)
                                         {
-                                            add.Invoke(collection, new[] { CreateObject(elementType, currentSources) });
+                                            adder(collection, CreateObject(elementType, currentSources));
                                         }
                                     }
                                 });
@@ -469,13 +482,18 @@ namespace DataGenerator
                                 throw new InvalidOperationException($@"Unable to determine primary keys for '{propertyType.Name}'.");
                             }
 
+                            var foreignKeySetDelegates = foreignKeyProps.Select(fkp => inputType.DelegateForSetPropertyValue(fkp.Name)).ToList();
+                            var primaryKeyGetDelegates = primaryKeyProps.Select(pkp => propertyType.DelegateForGetPropertyValue(pkp.Name)).ToList();
+                            var foreignObjectGetter = inputType.DelegateForGetPropertyValue(property.Name);
+                            var foreignObjectSetter = inputType.DelegateForSetPropertyValue(property.Name);
+
                             methods.Add((currentObject, currentSources, currentSingleton) =>
                             {
                                 var foreignObject = (noSources ? null : GetSource(currentSources, propertyType)) ?? this.CreateObject(propertyType, currentSources);
 
                                 if (currentSingleton)
                                 {
-                                    var existing = property.GetMethod.Invoke(currentObject, new object[0]);
+                                    var existing = foreignObjectGetter(currentObject);
 
                                     if (!object.ReferenceEquals(foreignObject, existing) && existing != null)
                                     {
@@ -486,10 +504,10 @@ namespace DataGenerator
                                 // Set foreign keys to primary keys of related object.
                                 for (var i = 0; i < foreignKeyProps.Length; ++i)
                                 {
-                                    foreignKeyProps[i].SetMethod.Invoke(currentObject, new[] { primaryKeysOfForeignObject[i].GetMethod.Invoke(foreignObject, new object[0]) });
+                                    foreignKeySetDelegates[i](currentObject, primaryKeyGetDelegates[i](foreignObject));
                                 }
 
-                                property.SetMethod.Invoke(currentObject, new[] { foreignObject });
+                                foreignObjectSetter(currentObject, foreignObject);
                             });
 
                             foreach (var foreignKeyProp in foreignKeyProps)
