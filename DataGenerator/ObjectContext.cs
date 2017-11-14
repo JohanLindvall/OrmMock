@@ -163,11 +163,6 @@ namespace DataGenerator
         /// <returns>The created object.</returns>
         public T Create<T>()
         {
-            if (this.TryCreateValue(typeof(T), string.Empty, out var result))
-            {
-                return (T)result;
-            }
-
             return (T)CreateObject(typeof(T), new List<object>());
         }
 
@@ -226,102 +221,99 @@ namespace DataGenerator
         /// <summary>
         /// Creates an object of type t, considering the sources for references.
         /// </summary>
-        /// <param name="t">The type of the object to create.</param>
+        /// <param name="objectType">The type of the object to create.</param>
         /// <param name="sources">The sources.</param>
         /// <returns></returns>
-        private object CreateObject(Type t, IList<object> sources)
+        private object CreateObject(Type objectType, IList<object> sources)
         {
-            if (this.singletons.TryGetValue(t, out object singleton))
+            if (!this.constructorCache.TryGetValue(objectType, out var constructor))
             {
-                // Register possible back references in singleton.
-                this.SetProperties(singleton, t, sources, true);
+                var simpleCreator = this.ValueCreator(objectType);
 
-                return singleton;
-            }
-
-            if (!this.constructorCache.TryGetValue(t, out var constructor))
-            {
-                var ctor = t.GetConstructors().SingleOrDefault();
-
-                var ctorParameters = new List<Func<IList<object>, object>>();
-
-                foreach (var constructorParameter in ctor?.GetParameters())
+                if (simpleCreator != null)
                 {
-                    var constructorParameterType = constructorParameter.ParameterType;
+                    constructor = _ => simpleCreator(string.Empty);
+                }
+                else
+                {
+                    var ctor = objectType.GetConstructors().SingleOrDefault();
 
-                    var valueCreator = this.ValueCreator(constructorParameterType);
+                    var ctorParameters = new List<Func<IList<object>, object>>();
 
-                    if (valueCreator != null)
+                    foreach (var constructorParameter in ctor?.GetParameters())
                     {
-                        ctorParameters.Add(_ => valueCreator(t.Name));
-                        continue;
+                        var constructorParameterType = constructorParameter.ParameterType;
+
+                        var valueCreator = this.ValueCreator(constructorParameterType);
+
+                        if (valueCreator != null)
+                        {
+                            ctorParameters.Add(_ => valueCreator(objectType.Name));
+                            continue;
+                        }
+
+                        if (this.structure.WithoutType.Contains(constructorParameterType))
+                        {
+                            ctorParameters.Add(_ => null);
+                            continue;
+                        }
+
+                        var noAncestry = this.structure.WithoutAncestryForType.Contains(constructorParameterType) || this.structure.WithoutAncestryForConstructor.Contains(constructorParameterType);
+
+                        ctorParameters.Add(localSources =>
+                        {
+                            var source = noAncestry ? null : GetSource(localSources, constructorParameterType);
+                            return source ?? CreateObject(constructorParameterType, localSources);
+                        });
                     }
 
-                    if (this.structure.WithoutType.Contains(constructorParameterType))
-                    {
-                        ctorParameters.Add(_ => null);
-                        continue;
-                    }
+                    var constructorDelegate = ctor.DelegateForCreateInstance();
 
-                    var noAncestry = this.structure.WithoutAncestryForType.Contains(constructorParameterType) || this.structure.WithoutAncestryForConstructor.Contains(constructorParameterType);
-
-                    ctorParameters.Add(localSources =>
+                    constructor = localSources =>
                     {
-                        var source = noAncestry ? null : GetSource(localSources, constructorParameterType);
-                        return source ?? CreateObject(constructorParameterType, localSources);
-                    });
+                        if (this.singletons.TryGetValue(objectType, out object singleton))
+                        {
+                            // Register possible back references in singleton.
+                            this.SetProperties(singleton, objectType, localSources, true);
+
+                            return singleton;
+                        }
+
+                        if (this.Logging)
+                        {
+                            var diag = $"{new string(' ', 4 * localSources.Count)}{objectType}";
+                            Console.WriteLine(diag);
+                        }
+
+                        if (++this.objectCount > this.ObjectLimit)
+                        {
+                            throw new InvalidOperationException($"Attempt to create more than {this.ObjectLimit} objects.");
+                        }
+
+                        var result = constructorDelegate(ctorParameters.Select(ca => ca(localSources)));
+
+                        localSources.Add(result);
+
+                        this.createdObjects.Add(result);
+
+                        this.SetProperties(result, objectType, localSources, false);
+
+                        localSources.RemoveAt(localSources.Count - 1);
+
+                        if (this.structure.Singletons.Contains(objectType))
+                        {
+                            this.singletons[objectType] = result;
+                        }
+
+                        return result;
+                    };
                 }
 
-                var constructorDelegate = ctor.DelegateForCreateInstance();
-
-                constructor = localSources =>
-                {
-                    if (this.Logging)
-                    {
-                        var diag = $"{new string(' ', 4 * localSources.Count)}{t}";
-                        Console.WriteLine(diag);
-                    }
-
-                    if (++this.objectCount > this.ObjectLimit)
-                    {
-                        throw new InvalidOperationException($"Attempt to create more than {this.ObjectLimit} objects.");
-                    }
-
-                    return constructorDelegate(ctorParameters.Select(ca => ca(localSources)));
-                };
-
-                this.constructorCache.Add(t, constructor);
+                this.constructorCache.Add(objectType, constructor);
             }
 
-            var result = constructor(sources);
-
-            sources.Add(result);
-
-            this.createdObjects.Add(result);
-
-            this.SetProperties(result, t, sources, false);
-
-            sources.RemoveAt(sources.Count - 1);
-
-            if (this.structure.Singletons.Contains(t))
-            {
-                this.singletons[t] = result;
-            }
-
-            return result;
+            return constructor(sources);
         }
-
-        private bool TryCreateValue(Type t, string prefix, out object result)
-        {
-            if (this.structure.CustomConstructors.TryGetValue(t, out Func<object> creator))
-            {
-                result = creator();
-                return true;
-            }
-
-            return this.SimpleValueGenerator.TryCreateValue(t, prefix, out result);
-        }
-
 
         private Func<string, object> ValueCreator(Type t)
         {
