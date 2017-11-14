@@ -335,6 +335,8 @@ namespace DataGenerator
                 {
                     return sources[i];
                 }
+
+                return null;
             }
 
             return null;
