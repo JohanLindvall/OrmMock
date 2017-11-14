@@ -54,6 +54,11 @@ namespace DataGenerator
         private readonly Dictionary<Type, List<Action<object, IList<object>, bool>>> methodPropertyCache = new Dictionary<Type, List<Action<object, IList<object>, bool>>>();
 
         /// <summary>
+        /// Holds the constructor cache for the given type.
+        /// </summary>
+        private readonly Dictionary<Type, Func<IList<object>, object>> constructorCache = new Dictionary<Type, Func<IList<object>, object>>();
+
+        /// <summary>
         /// Holds the structure data.
         /// </summary>
         private readonly Structure structure;
@@ -234,36 +239,61 @@ namespace DataGenerator
                 return singleton;
             }
 
-            var ctor = t.GetConstructors().SingleOrDefault();
-
-            var constructorArgs = ctor?.GetParameters().Select(p =>
+            if (!this.constructorCache.TryGetValue(t, out var constructor))
             {
-                if (this.TryCreateValue(p.ParameterType, t.Name, out object constructorParameter))
+                var ctor = t.GetConstructors().SingleOrDefault();
+
+                var ctorParameters = new List<Func<IList<object>, object>>();
+
+                foreach (var constructorParameter in ctor?.GetParameters())
                 {
-                    return constructorParameter;
+                    var constructorParameterType = constructorParameter.ParameterType;
+
+                    var valueCreator = this.ValueCreator(constructorParameterType);
+
+                    if (valueCreator != null)
+                    {
+                        ctorParameters.Add(_ => valueCreator(t.Name));
+                        continue;
+                    }
+
+                    if (this.structure.WithoutType.Contains(constructorParameterType))
+                    {
+                        ctorParameters.Add(_ => null);
+                        continue;
+                    }
+
+                    var noAncestry = this.structure.WithoutAncestryForType.Contains(constructorParameterType) || this.structure.WithoutAncestryForConstructor.Contains(constructorParameterType);
+
+                    ctorParameters.Add(localSources =>
+                    {
+                        var source = noAncestry ? null : GetSource(localSources, constructorParameterType);
+                        return source ?? CreateObject(constructorParameterType, localSources);
+                    });
                 }
 
-                if (this.structure.WithoutType.Contains(p.ParameterType))
+                var constructorDelegate = ctor.DelegateForCreateInstance();
+
+                constructor = localSources =>
                 {
-                    return null;
-                }
+                    if (this.Logging)
+                    {
+                        var diag = $"{new string(' ', 4 * localSources.Count)}{t}";
+                        Console.WriteLine(diag);
+                    }
 
-                var source = (this.structure.WithoutAncestryForType.Contains(p.ParameterType) || this.structure.WithoutAncestryForConstructor.Contains(p.ParameterType)) ? null : GetSource(sources, p.ParameterType);
-                return source ?? CreateObject(p.ParameterType, sources);
-            }).ToArray();
+                    if (++this.objectCount > this.ObjectLimit)
+                    {
+                        throw new InvalidOperationException($"Attempt to create more than {this.ObjectLimit} objects.");
+                    }
 
-            if (this.Logging)
-            {
-                var diag = $"{new string(' ', 4 * sources.Count)}{t}";
-                Console.WriteLine(diag);
+                    return constructorDelegate(ctorParameters.Select(ca => ca(localSources)));
+                };
+
+                this.constructorCache.Add(t, constructor);
             }
 
-            if (++this.objectCount > this.ObjectLimit)
-            {
-                throw new InvalidOperationException($"Attempt to create more than {this.ObjectLimit} objects.");
-            }
-
-            var result = Activator.CreateInstance(t, constructorArgs);
+            var result = constructor(sources);
 
             sources.Add(result);
 
