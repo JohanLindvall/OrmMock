@@ -290,7 +290,7 @@ namespace DataGenerator
                             throw new InvalidOperationException($"Attempt to create more than {this.ObjectLimit} objects.");
                         }
 
-                        var result = constructorDelegate(ctorParameters.Select(ca => ca(localSources)));
+                        var result = constructorDelegate(ctorParameters.Select(ca => ca(localSources)).ToArray());
 
                         localSources.Add(result);
 
@@ -315,6 +315,11 @@ namespace DataGenerator
             return constructor(sources);
         }
 
+        /// <summary>
+        /// Gets a value creator for the given type.
+        /// </summary>
+        /// <param name="t">The type to get the value creator for.</param>
+        /// <returns>A value creator, or null if no value creator could be found.</returns>
         private Func<string, object> ValueCreator(Type t)
         {
             if (this.structure.CustomConstructors.TryGetValue(t, out Func<object> creator))
@@ -325,6 +330,12 @@ namespace DataGenerator
             return this.SimpleValueGenerator.ValueCreator(t);
         }
 
+        /// <summary>
+        /// Gets an existing object of the given type from the sources list.
+        /// </summary>
+        /// <param name="sources">The list of existing object.</param>
+        /// <param name="sourceType"The source type.></param>
+        /// <returns>An exisiting object or null.</returns>
         private object GetSource(IList<object> sources, Type sourceType)
         {
             for (var i = sources.Count - 2; i >= 0; --i)
@@ -338,6 +349,13 @@ namespace DataGenerator
             return null;
         }
 
+        /// <summary>
+        /// Sets properties for the given input object, with the specified type.
+        /// </summary>
+        /// <param name="inputObject">The input object.</param>
+        /// <param name="inputType">The type of the input object.</param>
+        /// <param name="inputSources">The input object sources.</param>
+        /// <param name="inputSingleton">Determines if the input object is a singleton.</param>
         private void SetProperties(object inputObject, Type inputType, IList<object> inputSources, bool inputSingleton)
         {
             if (!this.methodPropertyCache.TryGetValue(inputType, out var methods))
@@ -413,7 +431,7 @@ namespace DataGenerator
 
                                 var elementType = propertyType.GetGenericArguments()[0];
                                 var collectionType = typeof(HashSet<>).MakeGenericType(elementType);
-                                var hashSetAdder = collectionType.DelegateForCallMethod("Add", elementType);
+                                var hashSetAdder = collectionType.DelegateForCallMethod(nameof(HashSet<int>.Add), elementType);
                                 var hashSetCreator = collectionType.DelegateForCreateInstance();
                                 var collectionSetter = inputType.DelegateForSetPropertyValue(property.Name);
                                 var collectionGetter = inputType.DelegateForGetPropertyValue(property.Name);
