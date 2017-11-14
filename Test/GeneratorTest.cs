@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using DataGenerator;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -11,6 +9,14 @@ namespace Test
     [TestClass]
     public class GeneratorTest
     {
+        private ObjectContext ctx;
+
+        [TestInitialize]
+        public void Setup()
+        {
+            this.ctx = new Generator().CreateContext();
+        }
+
         public class TestClass1
         {
             public int Id { get; set; }
@@ -31,15 +37,58 @@ namespace Test
             public string Name { get; set; }
         }
 
-        [TestMethod]
-        public void Test()
+        public class TestClass3
         {
-            var gen = new Generator();
-            var ctx = gen.CreateContext();
+            public TestClass3(TestClass1 tc1, Guid id)
+            {
 
-            var result = ctx.Create<TestClass1>();
+            }
+        }
 
-            var result2 = ctx.Create<TestClass1>();
+        public class TestClass4
+        {
+            public int Id { get; set; }
+
+            public TestClass5 Class5 { get; set; }
+
+            public int? Class5Id { get; set; }
+        }
+
+
+        public class TestClass5
+        {
+            public int Id { get; set; }
+
+            public virtual ICollection<TestClass4> Class4 { get; set; }
+        }
+
+        [TestMethod]
+        public void TestReferences()
+        {
+            var result = this.ctx.Create<TestClass2>();
+            Assert.AreEqual(3, result.Class1.Count);
+            Assert.IsTrue(result.Class1.All(t => t.Class2Id == t.Class2.Id));
+            Assert.IsTrue(result.Class1.All(t => object.ReferenceEquals(t.Class2, result)));
+        }
+
+        [TestMethod]
+        public void TestReferences2()
+        {
+            var result = this.ctx.Create<TestClass1>();
+            Assert.AreEqual(result.Class2.Class1.Single().Id, result.Id);
+        }
+
+        [TestMethod]
+        public void TestReferences3()
+        {
+            var result = this.ctx.CreateMany<TestClass4>(10).ToList();
+        }
+
+        [TestMethod]
+        public void TestConstructor()
+        {
+            var result = this.ctx.Create<TestClass3>();
+            Assert.IsNotNull(result);
         }
     }
 }

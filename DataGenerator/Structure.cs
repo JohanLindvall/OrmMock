@@ -60,6 +60,11 @@ namespace DataGenerator
         public Dictionary<PropertyInfo, int> Include { get; } = new Dictionary<PropertyInfo, int>();
 
         /// <summary>
+        /// Holds the dictionary of post create actions, performed after an object is constructed.
+        /// </summary>
+        public Dictionary<Type, Action<object>> PostCreate { get; } = new Dictionary<Type, Action<object>>();
+
+        /// <summary>
         /// Holds the dictionary of singleton types.
         /// </summary>
         public HashSet<Type> Singletons { get; } = new HashSet<Type>();
@@ -72,7 +77,7 @@ namespace DataGenerator
         /// <summary>
         /// Holds the dictionary of custom constructors.
         /// </summary>
-        public Dictionary<Type, Func<object>> CustomConstructors { get; } = new Dictionary<Type, Func<object>>();
+        public Dictionary<Type, Func<string, object>> CustomConstructors { get; } = new Dictionary<Type, Func<string, object>>();
 
         /// <summary>
         /// Holds the relations

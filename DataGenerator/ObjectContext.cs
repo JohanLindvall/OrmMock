@@ -64,9 +64,9 @@ namespace DataGenerator
         private readonly Structure structure;
 
         /// <summary>
-        /// Holds the generator for simple values.
+        /// Holds the random generator used by this instance.
         /// </summary>
-        public SimpleValueGenerator SimpleValueGenerator { get; } = new SimpleValueGenerator();
+        private readonly Random random = new Random();
 
         /// <summary>
         /// Gets or sets the limit of how many object to create in one pass.
@@ -244,17 +244,17 @@ namespace DataGenerator
                     {
                         var constructorParameterType = constructorParameter.ParameterType;
 
+                        if (this.structure.WithoutType.Contains(constructorParameterType))
+                        {
+                            ctorParameters.Add(_ => null);
+                            continue;
+                        }
+
                         var valueCreator = this.ValueCreator(constructorParameterType);
 
                         if (valueCreator != null)
                         {
                             ctorParameters.Add(_ => valueCreator(objectType.Name));
-                            continue;
-                        }
-
-                        if (this.structure.WithoutType.Contains(constructorParameterType))
-                        {
-                            ctorParameters.Add(_ => null);
                             continue;
                         }
 
@@ -269,9 +269,13 @@ namespace DataGenerator
 
                     var constructorDelegate = ctor.DelegateForCreateInstance();
 
+                    this.structure.PostCreate.TryGetValue(objectType, out var postCreate);
+
+                    var handleSingleton = this.structure.Singletons.Contains(objectType) || this.singletons.ContainsKey(objectType);
+
                     constructor = localSources =>
                     {
-                        if (this.singletons.TryGetValue(objectType, out object singleton))
+                        if (handleSingleton && this.singletons.TryGetValue(objectType, out object singleton))
                         {
                             // Register possible back references in singleton.
                             this.SetProperties(singleton, objectType, localSources, true);
@@ -300,7 +304,9 @@ namespace DataGenerator
 
                         localSources.RemoveAt(localSources.Count - 1);
 
-                        if (this.structure.Singletons.Contains(objectType))
+                        postCreate?.Invoke(result);
+
+                        if (handleSingleton)
                         {
                             this.singletons[objectType] = result;
                         }
@@ -313,21 +319,6 @@ namespace DataGenerator
             }
 
             return constructor(sources);
-        }
-
-        /// <summary>
-        /// Gets a value creator for the given type.
-        /// </summary>
-        /// <param name="t">The type to get the value creator for.</param>
-        /// <returns>A value creator, or null if no value creator could be found.</returns>
-        private Func<string, object> ValueCreator(Type t)
-        {
-            if (this.structure.CustomConstructors.TryGetValue(t, out Func<object> creator))
-            {
-                return _ => creator();
-            }
-
-            return this.SimpleValueGenerator.ValueCreator(t);
         }
 
         /// <summary>
@@ -435,6 +426,9 @@ namespace DataGenerator
                                 var hashSetCreator = collectionType.DelegateForCreateInstance();
                                 var collectionSetter = inputType.DelegateForSetPropertyValue(property.Name);
                                 var collectionGetter = inputType.DelegateForGetPropertyValue(property.Name);
+                                var foreignKeyProps = this.structure.Relations.GetForeignKeys(elementType, inputType);
+                                var foreignKeyNullable = foreignKeyProps != null && foreignKeyProps.Any(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null);
+                                var foreignKeyGetDelegates = foreignKeyProps?.Select(fkp => elementType.DelegateForGetPropertyValue(fkp.Name)).ToList();
 
                                 methods.Add((currentObject, currentSources, currentSingleton) =>
                                 {
@@ -459,7 +453,10 @@ namespace DataGenerator
 
                                     if (source != null)
                                     {
-                                        adder(collection, source);
+                                        if (!foreignKeyNullable || foreignKeyGetDelegates.All(fkgd => fkgd.Invoke(source) != null))
+                                        {
+                                            adder(collection, source);
+                                        }
                                     }
                                     else
                                     {
@@ -522,14 +519,23 @@ namespace DataGenerator
                                 throw new InvalidOperationException($@"Unable to determine primary keys for '{propertyType.Name}'.");
                             }
 
+                            var foreignKeyGetDelegates = foreignKeyProps.Select(fkp => inputType.DelegateForGetPropertyValue(fkp.Name)).ToList();
                             var foreignKeySetDelegates = foreignKeyProps.Select(fkp => inputType.DelegateForSetPropertyValue(fkp.Name)).ToList();
                             var primaryKeyGetDelegates = primaryKeyProps.Select(pkp => propertyType.DelegateForGetPropertyValue(pkp.Name)).ToList();
                             var foreignObjectGetter = inputType.DelegateForGetPropertyValue(property.Name);
                             var foreignObjectSetter = inputType.DelegateForSetPropertyValue(property.Name);
 
+                            var foreignKeyNullable = foreignKeyProps.Any(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null);
+
                             methods.Add((currentObject, currentSources, currentSingleton) =>
                             {
-                                var foreignObject = (noSources ? null : GetSource(currentSources, propertyType)) ?? this.CreateObject(propertyType, currentSources);
+                                // Handle nullable
+                                object foreignObject = null;
+
+                                if (!foreignKeyNullable || foreignKeyGetDelegates.All(fkgd => fkgd.Invoke(currentObject) != null))
+                                {
+                                    foreignObject = (noSources ? null : GetSource(currentSources, propertyType)) ?? this.CreateObject(propertyType, currentSources);
+                                }
 
                                 if (currentSingleton)
                                 {
@@ -541,20 +547,26 @@ namespace DataGenerator
                                     }
                                 }
 
-                                // Set foreign keys to primary keys of related object.
-                                for (var i = 0; i < foreignKeyProps.Length; ++i)
+                                if (foreignObject != null)
                                 {
-                                    foreignKeySetDelegates[i](currentObject, primaryKeyGetDelegates[i](foreignObject));
-                                }
+                                    // Set foreign keys to primary keys of related object.
+                                    for (var i = 0; i < foreignKeyProps.Length; ++i)
+                                    {
+                                        foreignKeySetDelegates[i](currentObject, primaryKeyGetDelegates[i](foreignObject));
+                                    }
 
-                                foreignObjectSetter(currentObject, foreignObject);
+                                    foreignObjectSetter(currentObject, foreignObject);
+                                }
                             });
 
-                            foreach (var foreignKeyProp in foreignKeyProps)
+                            if (!foreignKeyNullable)
                             {
-                                if (propertyPlacement.TryGetValue(foreignKeyProp, out var methodIndex))
+                                foreach (var foreignKeyProp in foreignKeyProps)
                                 {
-                                    methods[methodIndex] = null;
+                                    if (propertyPlacement.TryGetValue(foreignKeyProp, out var methodIndex))
+                                    {
+                                        methods[methodIndex] = null;
+                                    }
                                 }
                             }
                         }
@@ -570,6 +582,129 @@ namespace DataGenerator
             {
                 method(inputObject, inputSources, inputSingleton);
             }
+        }
+
+        /// <summary>
+        /// Returns a value creating delegate for the given type.
+        /// </summary>
+        /// <param name="t">The type for which to create values.</param>
+        /// <returns></returns>
+        private Func<string, object> ValueCreator(Type t)
+        {
+            if (this.structure.CustomConstructors.TryGetValue(t, out var creator))
+            {
+                return s => creator(s);
+            }
+
+            if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>))
+            {
+                t = Nullable.GetUnderlyingType(t);
+                var inner = this.ValueCreator(t);
+                if (inner == null)
+                {
+                    return null;
+                }
+
+                return s =>
+                {
+                    if (this.random.Next(0, 2) == 0)
+                    {
+                        return null;
+                    }
+                    else
+                    {
+                        return inner(s);
+                    }
+                };
+            }
+
+            if (t.IsEnum)
+            {
+                var values = Enum.GetValues(t);
+                return _ => values.GetValue(this.random.Next(0, values.Length));
+            }
+            else if (t == typeof(string))
+            {
+                return s =>
+                {
+                    var rnd = new byte[21];
+                    this.random.NextBytes(rnd);
+                    return s + Convert.ToBase64String(rnd);
+                };
+            }
+            else if (t == typeof(byte))
+            {
+                return _ => (byte)this.random.Next(byte.MinValue, byte.MaxValue + 1);
+            }
+            else if (t == typeof(short))
+            {
+                return _ => (short)this.random.Next(short.MinValue, short.MaxValue + 1);
+            }
+            else if (t == typeof(ushort))
+            {
+                return _ => (ushort)this.random.Next(ushort.MinValue, ushort.MaxValue + 1);
+            }
+            else if (t == typeof(int))
+            {
+                return _ => this.random.Next(int.MinValue, int.MaxValue); // TODO capped at maxValue - 1
+            }
+            else if (t == typeof(uint))
+            {
+                return _ => (uint)this.random.Next(int.MinValue, int.MaxValue); // TODO capped at maxValue - 1
+            }
+            else if (t == typeof(long))
+            {
+                return _ =>
+                {
+                    var rnd = new byte[8];
+                    this.random.NextBytes(rnd);
+                    return BitConverter.ToInt64(rnd, 0);
+                };
+            }
+            else if (t == typeof(ulong))
+            {
+                return _ =>
+                {
+                    var rnd = new byte[8];
+                    this.random.NextBytes(rnd);
+                    return BitConverter.ToUInt64(rnd, 0);
+                };
+            }
+            else if (t == typeof(double))
+            {
+                return _ => (this.random.NextDouble() - 0.5) * double.MaxValue;
+            }
+            else if (t == typeof(float))
+            {
+                return _ => (float)(this.random.NextDouble() - 0.5) * float.MaxValue;
+            }
+            else if (t == typeof(decimal))
+            {
+                return _ => (decimal)(this.random.NextDouble() - 0.5) * 1e2m; // TODO look into overflows?
+            }
+            else if (t == typeof(bool))
+            {
+                return _ => this.random.Next(0, 2) == 1;
+            }
+            else if (t == typeof(Guid))
+            {
+                return _ =>
+                {
+                    var rnd = new byte[16];
+                    this.random.NextBytes(rnd);
+                    return new Guid(rnd);
+                };
+            }
+            else if (t == typeof(DateTime))
+            {
+                return _ => DateTime.Now + TimeSpan.FromMilliseconds((this.random.NextDouble() - 0.5) * 62e9);
+            }
+            else if (t == typeof(DateTimeOffset))
+            {
+                return _ => DateTimeOffset.Now + TimeSpan.FromMilliseconds((this.random.NextDouble() - 0.5) * 62e9);
+            }
+
+            return null;
         }
     }
 }

@@ -86,7 +86,7 @@ namespace DataGenerator
         }
 
         /// <summary>
-        /// Exludes ancestry from being used when creating constructor parameters for a type.
+        /// Excludes ancestry from being used when creating constructor parameters for a type.
         /// </summary>
         /// <typeparam name="T">The type of the object to construct.</typeparam>
         /// <returns>The generator.</returns>
@@ -98,7 +98,7 @@ namespace DataGenerator
         }
 
         /// <summary>
-        /// Exludes ancestry from being used when setting properties on the type.
+        /// Excludes ancestry from being used when setting properties on the type.
         /// </summary>
         /// <typeparam name="T">The type of the object for which to ignore ancestry.</typeparam>
         /// <returns>The generator.</returns>
@@ -159,7 +159,20 @@ namespace DataGenerator
         /// <returns>The generator.</returns>
         public Generator With<T>(Func<T> creator)
         {
-            this.structure.CustomConstructors.Add(typeof(T), () => creator());
+            this.structure.CustomConstructors.Add(typeof(T), _ => creator());
+
+            return this;
+        }
+
+        /// <summary>
+        /// Sets a type to a specific value
+        /// </summary>
+        /// <typeparam name="T">The type of the object.</typeparam>
+        /// <param name="creator">The function returning an object.</param>
+        /// <returns>The generator.</returns>
+        public Generator With<T>(Func<string, T> creator)
+        {
+            this.structure.CustomConstructors.Add(typeof(T), s => creator(s));
 
             return this;
         }
@@ -172,6 +185,19 @@ namespace DataGenerator
         public Generator Singleton<T>()
         {
             this.structure.Singletons.Add(typeof(T));
+
+            return this;
+        }
+
+        /// <summary>
+        /// Register a post-create action to be performed after an object is fully constructed.
+        /// </summary>
+        /// <typeparam name="T">The type of the object.</typeparam>
+        /// <param name="method">The post-create action.</param>
+        /// <returns>The generator.</returns>
+        public Generator PostCreate<T>(Action<T> method)
+        {
+            this.structure.PostCreate.Add(typeof(T), o => method((T)o));
 
             return this;
         }

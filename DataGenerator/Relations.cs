@@ -41,6 +41,11 @@ namespace DataGenerator
         /// </summary>
         private readonly Dictionary<Tuple<Type, Type>, PropertyInfo[]> foreignKeys = new Dictionary<Tuple<Type, Type>, PropertyInfo[]>();
 
+        /// <summary>
+        /// Holds the dictionary of type, type to foreign key properties
+        /// </summary>
+        private readonly Dictionary<Tuple<Type, Type>, PropertyInfo> navigationProperties = new Dictionary<Tuple<Type, Type>, PropertyInfo>();
+
         public Relations()
         {
             this.DefaultPrimaryKey = type =>
@@ -51,7 +56,8 @@ namespace DataGenerator
 
             this.DefaultForeignKey = (thisType, foreignType) =>
             {
-                var property = thisType.GetProperty(thisType.GetProperties().Single(p => p.PropertyType == foreignType).Name + "Id");
+                var relationProperty = thisType.GetProperties().SingleOrDefault(p => p.PropertyType == foreignType);
+                var property = relationProperty == null ? null : thisType.GetProperty(relationProperty.Name + "Id");
                 return property == null ? null : new[] { property };
             };
         }
@@ -71,10 +77,12 @@ namespace DataGenerator
         /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <param name="expression">The expression defining the primary keys.</param>
-        public void RegisterPrimaryKeys<T>(Expression<Func<T, object>> expression)
+        public Relations RegisterPrimaryKeys<T>(Expression<Func<T, object>> expression)
             where T : class
         {
             this.primaryKeys.Add(typeof(T), ExpressionUtility.GetPropertyInfo(expression));
+
+            return this;
         }
 
         /// <summary>
@@ -83,11 +91,13 @@ namespace DataGenerator
         /// <typeparam name="TThis">The type of the object.</typeparam>
         /// <typeparam name="TForeign">The type of the foreign object.</typeparam>
         /// <param name="expression">The expression defining the foreign keys.</param>
-        public void RegisterForeignKeys<TThis, TForeign>(Expression<Func<TThis, object>> expression)
+        public Relations RegisterForeignKeys<TThis, TForeign>(Expression<Func<TThis, object>> expression)
             where TThis : class
             where TForeign : class
         {
             this.foreignKeys.Add(new Tuple<Type, Type>(typeof(TThis), typeof(TForeign)), ExpressionUtility.GetPropertyInfo(expression));
+
+            return this;
         }
 
         /// <summary>
@@ -97,12 +107,14 @@ namespace DataGenerator
         /// <typeparam name="TForeign">The second object type.</typeparam>
         /// <param name="expression1">The expression defining the foreign keys of the first object.</param>
         /// <param name="expression2">The expression defining the foreign keys of the second object.</param>
-        public void Register11Relation<TThis, TForeign>(Expression<Func<TThis, object>> expression1, Expression<Func<TForeign, object>> expression2)
+        public Relations Register11Relation<TThis, TForeign>(Expression<Func<TThis, object>> expression1, Expression<Func<TForeign, object>> expression2)
             where TThis : class
             where TForeign : class
         {
             this.RegisterForeignKeys<TThis, TForeign>(expression1);
             this.RegisterForeignKeys<TForeign, TThis>(expression2);
+
+            return this;
         }
 
         /// <summary>
@@ -141,37 +153,55 @@ namespace DataGenerator
             {
                 result = this.DefaultForeignKey(tThis, tForeign);
 
-                if (result == null)
+                if (result != null)
                 {
-                    throw new InvalidOperationException($@"Unable to determine foreign key for type '{tThis.Name}' to '{tForeign.Name}'.");
+                    var primary = this.GetPrimaryKeys(tForeign);
+
+                    var mismatch = false;
+
+                    if (result.Length != primary.Length)
+                    {
+                        mismatch = true;
+                    }
+                    else
+                    {
+                        for (var i = 0; i < result.Length; ++i)
+                        {
+                            if (!object.ReferenceEquals(Nullable.GetUnderlyingType(result[i].PropertyType) ?? result[i].PropertyType, primary[i].PropertyType))
+                            {
+                                mismatch = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (mismatch)
+                    {
+                        throw new InvalidOperationException($"Primary keys and foreign keys for '{tForeign}' in '{tThis}' do not match.");
+                    }
                 }
 
                 this.foreignKeys.Add(key, result);
             }
 
-            var primary = this.GetPrimaryKeys(tForeign);
+            return result;
+        }
 
-            var mismatch = false;
+        /// <summary>
+        /// Gets the navigation property from tThis to tForeign.
+        /// </summary>
+        /// <param name="tThis">The type of this object.</param>
+        /// <param name="tForeign">The type of the foreign object.</param>
+        /// <returns></returns>
+        public PropertyInfo GetNavigation(Type tThis, Type tForeign)
+        {
+            var key = new Tuple<Type, Type>(tThis, tForeign);
 
-            if (result.Length != primary.Length)
+            if (!this.navigationProperties.TryGetValue(key, out var result))
             {
-                mismatch = true;
-            }
-            else
-            {
-                for (var i = 0; i < result.Length; ++i)
-                {
-                    if (!object.ReferenceEquals(Nullable.GetUnderlyingType(result[i].PropertyType) ?? result[i].PropertyType, primary[i].PropertyType))
-                    {
-                        mismatch = true;
-                        break;
-                    }
-                }
-            }
+                result = tThis.GetProperties().SingleOrDefault(p => p.PropertyType == tForeign);
 
-            if (mismatch)
-            {
-                throw new InvalidOperationException($"Primary keys and foreign keys for '{tForeign}' in '{tThis}' do not match.");
+                this.navigationProperties.Add(key, result);
             }
 
             return result;
