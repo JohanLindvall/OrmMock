@@ -238,9 +238,14 @@ namespace DataGenerator
                 {
                     var ctor = objectType.GetConstructors().SingleOrDefault();
 
+                    if (ctor == null)
+                    {
+                        throw new InvalidOperationException($@"Cannot construct {objectType.Name}.");
+                    }
+
                     var ctorParameters = new List<Func<IList<object>, object>>();
 
-                    foreach (var constructorParameter in ctor?.GetParameters())
+                    foreach (var constructorParameter in ctor.GetParameters())
                     {
                         var constructorParameterType = constructorParameter.ParameterType;
 
@@ -325,18 +330,17 @@ namespace DataGenerator
         /// Gets an existing object of the given type from the sources list.
         /// </summary>
         /// <param name="sources">The list of existing object.</param>
-        /// <param name="sourceType"The source type.></param>
+        /// <param name="sourceType">The source type.</param>
         /// <returns>An exisiting object or null.</returns>
         private object GetSource(IList<object> sources, Type sourceType)
         {
-            for (var i = sources.Count - 2; i >= 0; --i)
+            if (sources.Count > 1)
             {
-                if (sources[i].GetType() == sourceType)
+                var source = sources[sources.Count - 1];
+                if (source.GetType() == sourceType)
                 {
-                    return sources[i];
+                    return source;
                 }
-
-                return null;
             }
 
             return null;
@@ -428,9 +432,7 @@ namespace DataGenerator
                                 var hashSetCreator = collectionType.DelegateForCreateInstance();
                                 var collectionSetter = inputType.DelegateForSetPropertyValue(property.Name);
                                 var collectionGetter = inputType.DelegateForGetPropertyValue(property.Name);
-                                var foreignKeyProps = this.structure.Relations.GetForeignKeys(elementType, inputType);
-                                var foreignKeyNullable = foreignKeyProps != null && foreignKeyProps.Any(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null);
-                                var foreignKeyGetDelegates = foreignKeyProps?.Select(fkp => elementType.DelegateForGetPropertyValue(fkp.Name)).ToList();
+                                var foreignKeyNullableGetDelegates = this.structure.Relations.GetForeignKeys(elementType, inputType)?.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(fkp => elementType.DelegateForGetPropertyValue(fkp.Name)).ToList();
 
                                 methods.Add((currentObject, currentSources, currentSingleton) =>
                                 {
@@ -455,7 +457,7 @@ namespace DataGenerator
 
                                     if (source != null)
                                     {
-                                        if (!foreignKeyNullable || foreignKeyGetDelegates.All(fkgd => fkgd.Invoke(source) != null))
+                                        if (foreignKeyNullableGetDelegates == null || foreignKeyNullableGetDelegates.Count == 0 || foreignKeyNullableGetDelegates.All(fkgd => fkgd.Invoke(source) != null))
                                         {
                                             adder(collection, source);
                                         }
@@ -521,20 +523,19 @@ namespace DataGenerator
                                 throw new InvalidOperationException($@"Unable to determine primary keys for '{propertyType.Name}'.");
                             }
 
-                            var foreignKeyGetDelegates = foreignKeyProps.Select(fkp => inputType.DelegateForGetPropertyValue(fkp.Name)).ToList();
                             var foreignKeySetDelegates = foreignKeyProps.Select(fkp => inputType.DelegateForSetPropertyValue(fkp.Name)).ToList();
                             var primaryKeyGetDelegates = primaryKeyProps.Select(pkp => propertyType.DelegateForGetPropertyValue(pkp.Name)).ToList();
                             var foreignObjectGetter = inputType.DelegateForGetPropertyValue(property.Name);
                             var foreignObjectSetter = inputType.DelegateForSetPropertyValue(property.Name);
 
-                            var foreignKeyNullable = foreignKeyProps.Any(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null);
+                            var foreignKeyNullableGetDelegates = foreignKeyProps.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(fkp => inputType.DelegateForGetPropertyValue(fkp.Name)).ToList();
 
                             methods.Add((currentObject, currentSources, currentSingleton) =>
                             {
                                 // Handle nullable
                                 object foreignObject = null;
 
-                                if (!foreignKeyNullable || foreignKeyGetDelegates.All(fkgd => fkgd.Invoke(currentObject) != null))
+                                if (foreignKeyNullableGetDelegates.Count == 0 || foreignKeyNullableGetDelegates.All(fkgd => fkgd.Invoke(currentObject) != null))
                                 {
                                     foreignObject = (noSources ? null : GetSource(currentSources, propertyType)) ?? this.CreateObject(propertyType, currentSources);
                                 }
@@ -543,7 +544,7 @@ namespace DataGenerator
                                 {
                                     var existing = foreignObjectGetter(currentObject);
 
-                                    if (!object.ReferenceEquals(foreignObject, existing) && existing != null)
+                                    if (!ReferenceEquals(foreignObject, existing) && existing != null)
                                     {
                                         throw new InvalidOperationException($"Ambiguous property for singleton {inputType.Name}.{p.Name}.");
                                     }
@@ -561,7 +562,7 @@ namespace DataGenerator
                                 }
                             });
 
-                            if (!foreignKeyNullable)
+                            if (foreignKeyNullableGetDelegates.Count == 0)
                             {
                                 foreach (var foreignKeyProp in foreignKeyProps)
                                 {
