@@ -74,6 +74,11 @@ namespace DataGenerator
         public int ObjectLimit { get; set; } = 1000;
 
         /// <summary>
+        /// Gets or sets the limit of how deep the object hierarchy can be.
+        /// </summary>
+        public int RecursionLimit { get; set; } = 100;
+
+        /// <summary>
         /// Gets or sets the number of items to create in root level object collections.
         /// </summary>
         public int RootCollectionMembers { get; set; } = 3;
@@ -281,6 +286,11 @@ namespace DataGenerator
 
                     constructor = (localSource, localLevel) =>
                     {
+                        if (localLevel >= this.RecursionLimit)
+                        {
+                            throw new InvalidOperationException($@"Recursion limit of {this.RecursionLimit} exceeded.");
+                        }
+
                         if (handleSingleton && this.singletons.TryGetValue(objectType, out object singleton))
                         {
                             // Register possible back references in singleton.
