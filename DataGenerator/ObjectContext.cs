@@ -51,12 +51,12 @@ namespace DataGenerator
         /// <summary>
         /// Holds the method property cache.
         /// </summary>
-        private readonly Dictionary<Type, List<Action<object, IList<object>, bool>>> methodPropertyCache = new Dictionary<Type, List<Action<object, IList<object>, bool>>>();
+        private readonly Dictionary<Type, List<Action<object, object, int, bool>>> methodPropertyCache = new Dictionary<Type, List<Action<object, object, int, bool>>>();
 
         /// <summary>
         /// Holds the constructor cache for the given type.
         /// </summary>
-        private readonly Dictionary<Type, Func<IList<object>, object>> constructorCache = new Dictionary<Type, Func<IList<object>, object>>();
+        private readonly Dictionary<Type, Func<object, int, object>> constructorCache = new Dictionary<Type, Func<object, int, object>>();
 
         /// <summary>
         /// Holds the structure data.
@@ -163,7 +163,7 @@ namespace DataGenerator
         /// <returns>The created object.</returns>
         public T Create<T>()
         {
-            return (T)CreateObject(typeof(T), new List<object>());
+            return (T)CreateObject(typeof(T), new List<object>(), 0);
         }
 
         /// <summary>
@@ -222,9 +222,10 @@ namespace DataGenerator
         /// Creates an object of type t, considering the sources for references.
         /// </summary>
         /// <param name="objectType">The type of the object to create.</param>
-        /// <param name="sources">The sources.</param>
+        /// <param name="sourceObject">The sources.</param>
+        /// <param name="level">The recursion level.</param>
         /// <returns></returns>
-        private object CreateObject(Type objectType, IList<object> sources)
+        private object CreateObject(Type objectType, object sourceObject, int level)
         {
             if (!this.constructorCache.TryGetValue(objectType, out var constructor))
             {
@@ -232,7 +233,7 @@ namespace DataGenerator
 
                 if (simpleCreator != null)
                 {
-                    constructor = _ => simpleCreator(string.Empty);
+                    constructor = (_, __) => simpleCreator(string.Empty);
                 }
                 else
                 {
@@ -243,7 +244,7 @@ namespace DataGenerator
                         throw new InvalidOperationException($@"Cannot construct {objectType.Name}.");
                     }
 
-                    var ctorParameters = new List<Func<IList<object>, object>>();
+                    var ctorParameters = new List<Func<object, int, object>>();
 
                     foreach (var constructorParameter in ctor.GetParameters())
                     {
@@ -251,7 +252,7 @@ namespace DataGenerator
 
                         if (this.structure.WithoutType.Contains(constructorParameterType))
                         {
-                            ctorParameters.Add(_ => null);
+                            ctorParameters.Add((_, __) => null);
                             continue;
                         }
 
@@ -259,16 +260,16 @@ namespace DataGenerator
 
                         if (valueCreator != null)
                         {
-                            ctorParameters.Add(_ => valueCreator(objectType.Name));
+                            ctorParameters.Add((_, __) => valueCreator(objectType.Name));
                             continue;
                         }
 
                         var noAncestry = this.structure.WithoutAncestryForType.Contains(constructorParameterType) || this.structure.WithoutAncestryForConstructor.Contains(constructorParameterType);
 
-                        ctorParameters.Add(localSources =>
+                        ctorParameters.Add((localSourceObject, localLevel) =>
                         {
-                            var source = noAncestry ? null : GetSource(localSources, constructorParameterType);
-                            return source ?? CreateObject(constructorParameterType, localSources);
+                            var source = noAncestry ? null : GetSource(localSourceObject, constructorParameterType);
+                            return source ?? CreateObject(constructorParameterType, localSourceObject, localLevel);
                         });
                     }
 
@@ -278,19 +279,19 @@ namespace DataGenerator
 
                     var handleSingleton = this.structure.Singletons.Contains(objectType) || this.singletons.ContainsKey(objectType);
 
-                    constructor = localSources =>
+                    constructor = (localSource, localLevel) =>
                     {
                         if (handleSingleton && this.singletons.TryGetValue(objectType, out object singleton))
                         {
                             // Register possible back references in singleton.
-                            this.SetProperties(singleton, objectType, localSources, true);
+                            this.SetProperties(singleton, localSource, objectType, true, localLevel);
 
                             return singleton;
                         }
 
                         if (this.Logging)
                         {
-                            var diag = $"{new string(' ', 4 * localSources.Count)}{objectType}";
+                            var diag = $"{new string(' ', 4 * localLevel)}{objectType}";
                             Console.WriteLine(diag);
                         }
 
@@ -299,15 +300,11 @@ namespace DataGenerator
                             throw new InvalidOperationException($"Attempt to create more than {this.ObjectLimit} objects.");
                         }
 
-                        var result = constructorDelegate(ctorParameters.Select(ca => ca(localSources)).ToArray());
-
-                        localSources.Add(result);
+                        var result = constructorDelegate(ctorParameters.Select(ca => ca(localSource, localLevel)).ToArray());
 
                         this.createdObjects.Add(result);
 
-                        this.SetProperties(result, objectType, localSources, false);
-
-                        localSources.RemoveAt(localSources.Count - 1);
+                        this.SetProperties(result, localSource, objectType, false, localLevel);
 
                         postCreate?.Invoke(result);
 
@@ -323,24 +320,20 @@ namespace DataGenerator
                 this.constructorCache.Add(objectType, constructor);
             }
 
-            return constructor(sources);
+            return constructor(sourceObject, sourceObject == null ? level : level + 1);
         }
 
         /// <summary>
         /// Gets an existing object of the given type from the sources list.
         /// </summary>
-        /// <param name="sources">The list of existing object.</param>
+        /// <param name="source">The existing object.</param>
         /// <param name="sourceType">The source type.</param>
         /// <returns>An exisiting object or null.</returns>
-        private object GetSource(IList<object> sources, Type sourceType)
+        private object GetSource(object source, Type sourceType)
         {
-            if (sources.Count > 1)
+            if (source.GetType() == sourceType)
             {
-                var source = sources[sources.Count - 1];
-                if (source.GetType() == sourceType)
-                {
-                    return source;
-                }
+                return source;
             }
 
             return null;
@@ -350,14 +343,15 @@ namespace DataGenerator
         /// Sets properties for the given input object, with the specified type.
         /// </summary>
         /// <param name="inputObject">The input object.</param>
+        /// <param name="sourceObject">The source object.</param>
         /// <param name="inputType">The type of the input object.</param>
-        /// <param name="inputSources">The input object sources.</param>
         /// <param name="inputSingleton">Determines if the input object is a singleton.</param>
-        private void SetProperties(object inputObject, Type inputType, IList<object> inputSources, bool inputSingleton)
+        /// <param name="level">The recursion level.</param>
+        private void SetProperties(object inputObject, object sourceObject, Type inputType, bool inputSingleton, int level)
         {
             if (!this.methodPropertyCache.TryGetValue(inputType, out var methods))
             {
-                methods = new List<Action<object, IList<object>, bool>>();
+                methods = new List<Action<object, object, int, bool>>();
 
                 var referenceProperties = new List<PropertyInfo>();
                 var propertyPlacement = new Dictionary<PropertyInfo, int>();
@@ -377,7 +371,7 @@ namespace DataGenerator
                     {
                         propertyPlacement.Add(property, methods.Count);
                         var setterDelegate = inputType.DelegateForSetPropertyValue(property.Name);
-                        methods.Add((currentObject, _, currentSingleton) =>
+                        methods.Add((currentObject, _, __, currentSingleton) =>
                         {
                             if (!currentSingleton)
                             {
@@ -393,7 +387,7 @@ namespace DataGenerator
                     {
                         propertyPlacement.Add(property, methods.Count);
                         var setterDelegate = inputType.DelegateForSetPropertyValue(property.Name);
-                        methods.Add((currentObject, _, currentSingleton) =>
+                        methods.Add((currentObject, _, __, currentSingleton) =>
                         {
                             if (!currentSingleton)
                             {
@@ -434,7 +428,7 @@ namespace DataGenerator
                                 var collectionGetter = inputType.DelegateForGetPropertyValue(property.Name);
                                 var foreignKeyNullableGetDelegates = this.structure.Relations.GetForeignKeys(elementType, inputType)?.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(fkp => elementType.DelegateForGetPropertyValue(fkp.Name)).ToList();
 
-                                methods.Add((currentObject, currentSources, currentSingleton) =>
+                                methods.Add((currentObject, currentSource, currentLevel, currentSingleton) =>
                                 {
                                     var collection = collectionGetter(currentObject);
                                     var adder = hashSetAdder;
@@ -453,7 +447,7 @@ namespace DataGenerator
                                         }
                                     }
 
-                                    var source = noSources ? null : GetSource(currentSources, elementType);
+                                    var source = noSources ? null : GetSource(currentSource, elementType);
 
                                     if (source != null)
                                     {
@@ -471,12 +465,12 @@ namespace DataGenerator
 
                                         if (!this.structure.Include.TryGetValue(property, out int elementCount))
                                         {
-                                            elementCount = inputSources.Count == 1 ? this.RootCollectionMembers : this.NonRootCollectionMembers;
+                                            elementCount = currentLevel == 0 ? this.RootCollectionMembers : this.NonRootCollectionMembers;
                                         }
 
                                         for (var i = 0; i < elementCount; ++i)
                                         {
-                                            adder(collection, CreateObject(elementType, currentSources));
+                                            adder(collection, CreateObject(elementType, currentObject, currentLevel));
                                         }
                                     }
                                 });
@@ -530,14 +524,14 @@ namespace DataGenerator
 
                             var foreignKeyNullableGetDelegates = foreignKeyProps.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(fkp => inputType.DelegateForGetPropertyValue(fkp.Name)).ToList();
 
-                            methods.Add((currentObject, currentSources, currentSingleton) =>
+                            methods.Add((currentObject, currentSources, currentLevel, currentSingleton) =>
                             {
                                 // Handle nullable
                                 object foreignObject = null;
 
                                 if (foreignKeyNullableGetDelegates.Count == 0 || foreignKeyNullableGetDelegates.All(fkgd => fkgd.Invoke(currentObject) != null))
                                 {
-                                    foreignObject = (noSources ? null : GetSource(currentSources, propertyType)) ?? this.CreateObject(propertyType, currentSources);
+                                    foreignObject = (noSources ? null : GetSource(currentSources, propertyType)) ?? this.CreateObject(propertyType, currentObject, currentLevel);
                                 }
 
                                 if (currentSingleton)
@@ -583,7 +577,7 @@ namespace DataGenerator
 
             foreach (var method in methods)
             {
-                method(inputObject, inputSources, inputSingleton);
+                method(inputObject, sourceObject, level, inputSingleton);
             }
         }
 
