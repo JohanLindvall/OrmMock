@@ -95,7 +95,11 @@ namespace DataGenerator
             where TThis : class
             where TForeign : class
         {
-            this.foreignKeys.Add(new Tuple<Type, Type>(typeof(TThis), typeof(TForeign)), ExpressionUtility.GetPropertyInfo(expression));
+            var keys = ExpressionUtility.GetPropertyInfo(expression);
+
+            this.ValidateForeignKeys(typeof(TThis), typeof(TForeign), keys);
+
+            this.foreignKeys.Add(new Tuple<Type, Type>(typeof(TThis), typeof(TForeign)), keys);
 
             return this;
         }
@@ -155,36 +159,48 @@ namespace DataGenerator
 
                 if (result != null)
                 {
-                    var primary = this.GetPrimaryKeys(tForeign);
-
-                    var mismatch = false;
-
-                    if (result.Length != primary.Length)
-                    {
-                        mismatch = true;
-                    }
-                    else
-                    {
-                        for (var i = 0; i < result.Length; ++i)
-                        {
-                            if (!object.ReferenceEquals(Nullable.GetUnderlyingType(result[i].PropertyType) ?? result[i].PropertyType, primary[i].PropertyType))
-                            {
-                                mismatch = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (mismatch)
-                    {
-                        throw new InvalidOperationException($"Primary keys and foreign keys for '{tForeign}' in '{tThis}' do not match.");
-                    }
+                    this.ValidateForeignKeys(tThis, tForeign, result);
                 }
 
                 this.foreignKeys.Add(key, result);
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Validates that the type of the foreign keys match the primary keys of the foregin object.
+        /// </summary>
+        /// <param name="tThis">The type of the object.</param>
+        /// <param name="tForeign">The type of the foreign object.</param>
+        /// <param name="result">The forein keys</param>
+
+        private void ValidateForeignKeys(Type tThis, Type tForeign, PropertyInfo[] foreignKeys)
+        {
+            var primary = this.GetPrimaryKeys(tForeign);
+
+            var mismatch = false;
+
+            if (foreignKeys.Length != primary.Length)
+            {
+                mismatch = true;
+            }
+            else
+            {
+                for (var i = 0; i < foreignKeys.Length; ++i)
+                {
+                    if (!object.ReferenceEquals(Nullable.GetUnderlyingType(foreignKeys[i].PropertyType) ?? foreignKeys[i].PropertyType, primary[i].PropertyType))
+                    {
+                        mismatch = true;
+                        break;
+                    }
+                }
+            }
+
+            if (mismatch)
+            {
+                throw new InvalidOperationException($"Primary keys and foreign keys for '{tForeign}' in '{tThis}' do not match.");
+            }
         }
     }
 }

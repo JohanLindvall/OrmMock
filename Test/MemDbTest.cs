@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using DataGenerator;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NUnit.Framework;
 
 namespace Test
 {
-    [TestClass]
+    [TestFixture]
     public class MemDbTest
     {
         public class TestClass1
@@ -65,7 +65,7 @@ namespace Test
             public TestClass4 Ref2 { get; set; }
         }
 
-        [TestMethod]
+        [Test]
         public void TestAdd()
         {
             var db = new MemDb();
@@ -74,18 +74,18 @@ namespace Test
             Assert.AreEqual(1, db.Count<TestClass1>());
         }
 
-        [TestMethod]
+        [Test]
         public void TestAddTwiceSameKey()
         {
             var db = new MemDb();
             var obj = new TestClass1 { Id = Guid.NewGuid() };
             db.Add(obj);
             obj = new TestClass1 { Id = obj.Id };
-            Assert.ThrowsException<InvalidOperationException>(() => db.Add(obj));
+            Assert.Throws<InvalidOperationException>(() => db.Add(obj));
             Assert.AreEqual(1, db.Count<TestClass1>());
         }
 
-        [TestMethod]
+        [Test]
         public void TestCount()
         {
             var db = new MemDb();
@@ -100,30 +100,30 @@ namespace Test
             Assert.AreEqual(5, db.Count());
         }
 
-        [TestMethod]
+        [Test]
         public void TestAddUnknownKey()
         {
             var db = new MemDb();
             var obj = new TestClass1 { Id = Guid.NewGuid() };
-            Assert.ThrowsException<InvalidOperationException>(() => db.Add(new TestClass2()));
+            Assert.Throws<InvalidOperationException>(() => db.Add(new TestClass2()));
             Assert.AreEqual(0, db.Count());
         }
 
-        [TestMethod]
+        [Test]
         public void TestRegisterKey()
         {
             var db = new MemDb();
             db.RegisterKey<TestClass2>(i => i.Key1);
         }
 
-        [TestMethod]
+        [Test]
         public void TestRegisterKeyFail()
         {
             var db = new MemDb();
-            Assert.ThrowsException<InvalidOperationException>(() => db.RegisterKey<TestClass2>(i => i.Key1 + 1));
+            Assert.Throws<InvalidOperationException>(() => db.RegisterKey<TestClass2>(i => i.Key1 + 1));
         }
 
-        [TestMethod]
+        [Test]
         public void TestRegisterKeyGet()
         {
             var db = new MemDb();
@@ -134,21 +134,21 @@ namespace Test
             Assert.AreEqual(45, fetched.Key2);
         }
 
-        [TestMethod]
+        [Test]
         public void TestRegisterKeyComposite()
         {
             var db = new MemDb();
             db.RegisterKey<TestClass2>(i => new { i.Key2, i.Key1 });
         }
 
-        [TestMethod]
+        [Test]
         public void TestRegisterKeyCompositeFail()
         {
             var db = new MemDb();
-            Assert.ThrowsException<InvalidOperationException>(() => db.RegisterKey<TestClass2>(i => new { foo = i.Key1 + 1 }));
+            Assert.Throws<InvalidOperationException>(() => db.RegisterKey<TestClass2>(i => new { foo = i.Key1 + 1 }));
         }
 
-        [TestMethod]
+        [Test]
         public void TestRegisterKeyGetComposite()
         {
             var db = new MemDb();
@@ -159,7 +159,7 @@ namespace Test
             Assert.AreEqual(45, fetched.Key2);
         }
 
-        [TestMethod]
+        [Test]
         public void TestRegisterKeyGetCompositeFail()
         {
             var db = new MemDb();
@@ -169,7 +169,7 @@ namespace Test
             Assert.IsNull(fetched);
         }
 
-        [TestMethod]
+        [Test]
         public void TestGet()
         {
             var db = new MemDb();
@@ -179,7 +179,7 @@ namespace Test
             Assert.AreSame(stored, fetched);
         }
 
-        [TestMethod]
+        [Test]
         public void TestQueryable()
         {
             var db = new MemDb();
@@ -188,14 +188,14 @@ namespace Test
             db.Queryable<TestClass1>().Single(s => s.Id == stored.Id);
         }
 
-        [TestMethod]
+        [Test]
         public void TestQueryableEmpty()
         {
             var db = new MemDb();
             Assert.AreEqual(0, db.Queryable<TestClass1>().Count());
         }
 
-        [TestMethod]
+        [Test]
         public void TestRemove()
         {
             var db = new MemDb();
@@ -206,14 +206,14 @@ namespace Test
             Assert.AreEqual(0, db.Count());
         }
 
-        [TestMethod]
+        [Test]
         public void TestRemoveMissing()
         {
             var db = new MemDb();
             Assert.IsFalse(db.Remove(new TestClass1 { Id = Guid.NewGuid() }));
         }
 
-        [TestMethod]
+        [Test]
         public void TestAddChildren()
         {
             var db = new MemDb();
@@ -237,7 +237,7 @@ namespace Test
             Assert.IsNotNull(db.Get<TestClass4>(3));
         }
 
-        [TestMethod]
+        [Test]
         public void TestAddChildrenWithSameKey()
         {
             var db = new MemDb();
@@ -261,7 +261,7 @@ namespace Test
             Assert.AreEqual(2, db.Count());
         }
 
-        [TestMethod]
+        [Test]
         public void TestAddChildrenTwice()
         {
             var db = new MemDb();
@@ -280,7 +280,7 @@ namespace Test
             Assert.AreEqual(2, db.Count());
         }
 
-        [TestMethod]
+        [Test]
         public void TestAddReference()
         {
             var db = new MemDb();
@@ -305,7 +305,7 @@ namespace Test
             Assert.AreEqual(3, db.Count());
         }
 
-        [TestMethod]
+        [Test]
         public void TestAddFilter()
         {
             var db = new MemDb { IncludeFilter = type => type == typeof(TestClass4) };

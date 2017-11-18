@@ -1,11 +1,10 @@
 ﻿using System;
-using System.Linq;
 using DataGenerator;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NUnit.Framework;
 
 namespace Test
 {
-    [TestClass]
+    [TestFixture]
     public class RelationsTest
     {
         public class TestClass1
@@ -36,13 +35,13 @@ namespace Test
 
         private Relations relations;
 
-        [TestInitialize]
+        [SetUp]
         public void Setup()
         {
             this.relations = new Relations();
         }
 
-        [TestMethod]
+        [Test]
         public void TestGetPrimaryKeys()
         {
             this.relations.RegisterPrimaryKeys<TestClass2>(tc => new { tc.Id1, tc.Id2 });
@@ -52,10 +51,10 @@ namespace Test
 
             CollectionAssert.AreEqual(new[] { typeof(TestClass1).GetProperty(nameof(TestClass1.Id)) }, pk1);
             CollectionAssert.AreEqual(new[] { typeof(TestClass2).GetProperty(nameof(TestClass2.Id1)), typeof(TestClass2).GetProperty(nameof(TestClass2.Id2)) }, pk2);
-            Assert.ThrowsException<InvalidOperationException>(() => this.relations.GetPrimaryKeys(typeof(TestClass3)));
+            Assert.Throws<InvalidOperationException>(() => this.relations.GetPrimaryKeys(typeof(TestClass3)));
         }
 
-        [TestMethod]
+        [Test]
         public void TestGetForeignKeys()
         {
             this.relations.RegisterPrimaryKeys<TestClass2>(tc => new { tc.Id1, tc.Id2 });
@@ -70,13 +69,10 @@ namespace Test
             Assert.IsNull(fk3);
         }
 
-        [TestMethod]
+        [Test]
         public void TestGetForeignKeysMismatch()
         {
-            this.relations.RegisterForeignKeys<TestClass3, TestClass1>(tc => tc.TestClass2Id2);
-
-            Assert.ThrowsException<InvalidOperationException>(() => this.relations.GetForeignKeys(typeof(TestClass3), typeof(TestClass1)));
+            Assert.Throws<InvalidOperationException>(() => this.relations.RegisterForeignKeys<TestClass3, TestClass1>(tc => tc.TestClass2Id2));
         }
-
     }
 }

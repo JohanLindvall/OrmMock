@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Linq;
 using DataGenerator;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NUnit.Framework;
 
 namespace Test
 {
-    [TestClass]
+    [TestFixture]
     public class ExpressionUtilityTest
     {
         public class TestClass
@@ -15,14 +15,14 @@ namespace Test
             public string Str { get; set; }
         }
 
-        [TestMethod]
+        [Test]
         public void TestMemberExpression()
         {
             var ids = ExpressionUtility.GetPropertyInfo<TestClass, int>(tc => tc.Id);
             Assert.AreSame(typeof(TestClass).GetProperty(nameof(TestClass.Id)), ids.Single());
         }
 
-        [TestMethod]
+        [Test]
         public void TestNewExpression()
         {
             var ids = ExpressionUtility.GetPropertyInfo<TestClass, object>(tc => new { tc.Id, tc.Str });
@@ -31,17 +31,17 @@ namespace Test
             Assert.AreEqual(2, ids.Length);
         }
 
-        [TestMethod]
+        [Test]
         public void TestUnaryExpression()
         {
             var ids = ExpressionUtility.GetPropertyInfo<TestClass, object>(tc => (object)tc.Id);
             Assert.AreSame(typeof(TestClass).GetProperty(nameof(TestClass.Id)), ids.Single());
         }
 
-        [TestMethod]
+        [Test]
         public void TestUnsupported()
         {
-            Assert.ThrowsException<InvalidOperationException>(() => ExpressionUtility.GetPropertyInfo<TestClass, object>(tc => "foo"));
+            Assert.Throws<InvalidOperationException>(() => ExpressionUtility.GetPropertyInfo<TestClass, object>(tc => "foo"));
         }
     }
 }

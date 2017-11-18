@@ -2,16 +2,16 @@
 using System.Collections.Generic;
 using System.Linq;
 using DataGenerator;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NUnit.Framework;
 
 namespace Test
 {
-    [TestClass]
+    [TestFixture]
     public class GeneratorTest
     {
         private ObjectContext ctx;
 
-        [TestInitialize]
+        [SetUp]
         public void Setup()
         {
             this.ctx = new Generator().CreateContext();
@@ -94,7 +94,7 @@ namespace Test
             public ICollection<TestClass6> Class6 { get; set; }
         }
 
-        [TestMethod]
+        [Test]
         public void TestReferences()
         {
             var result = this.ctx.Create<TestClass2>();
@@ -103,20 +103,20 @@ namespace Test
             Assert.IsTrue(result.Class1.All(t => object.ReferenceEquals(t.Class2, result)));
         }
 
-        [TestMethod]
+        [Test]
         public void TestReferences2()
         {
             var result = this.ctx.Create<TestClass1>();
             Assert.AreEqual(result.Class2.Class1.Single().Id, result.Id);
         }
 
-        [TestMethod]
+        [Test]
         public void TestReferences3()
         {
             var result = this.ctx.CreateMany<TestClass4>(10).ToList();
         }
 
-        [TestMethod]
+        [Test]
         public void TestReferences4()
         {
             var result = this.ctx.Create<TestClass6>();
@@ -125,7 +125,7 @@ namespace Test
             // var tc8 = this.ctx.GetObjects<TestClass8>().Single();
         }
 
-        [TestMethod]
+        [Test]
         public void TestConstructor()
         {
             var result = this.ctx.Create<TestClass3>();
