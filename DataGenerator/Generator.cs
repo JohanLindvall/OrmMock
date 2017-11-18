@@ -190,19 +190,6 @@ namespace DataGenerator
         }
 
         /// <summary>
-        /// Register a post-create action to be performed after an object is fully constructed.
-        /// </summary>
-        /// <typeparam name="T">The type of the object.</typeparam>
-        /// <param name="method">The post-create action.</param>
-        /// <returns>The generator.</returns>
-        public Generator PostCreate<T>(Action<T> method)
-        {
-            this.structure.PostCreate.Add(typeof(T), o => method((T)o));
-
-            return this;
-        }
-
-        /// <summary>
         /// Creates an object context from the static structure.
         /// </summary>
         /// <returns>An object context.</returns>

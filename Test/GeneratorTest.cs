@@ -122,7 +122,7 @@ namespace Test
             var result = this.ctx.Create<TestClass6>();
             var tc6 = this.ctx.GetObjects<TestClass6>().Single();
             var tc7 = this.ctx.GetObjects<TestClass7>().Single();
-            var tc8 = this.ctx.GetObjects<TestClass8>().Single();
+            // var tc8 = this.ctx.GetObjects<TestClass8>().Single();
         }
 
         [TestMethod]

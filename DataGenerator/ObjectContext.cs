@@ -280,8 +280,6 @@ namespace DataGenerator
 
                     var constructorDelegate = ctor.DelegateForCreateInstance();
 
-                    this.structure.PostCreate.TryGetValue(objectType, out var postCreate);
-
                     var handleSingleton = this.structure.Singletons.Contains(objectType) || this.singletons.ContainsKey(objectType);
 
                     constructor = (localSource, localLevel) =>
@@ -316,8 +314,6 @@ namespace DataGenerator
 
                         this.SetProperties(result, localSource, objectType, false, localLevel);
 
-                        postCreate?.Invoke(result);
-
                         if (handleSingleton)
                         {
                             this.singletons[objectType] = result;
@@ -330,7 +326,7 @@ namespace DataGenerator
                 this.constructorCache.Add(objectType, constructor);
             }
 
-            return constructor(sourceObject, sourceObject == null ? level : level + 1);
+            return constructor(sourceObject, level);
         }
 
         /// <summary>
@@ -419,7 +415,7 @@ namespace DataGenerator
                     {
                         var property = p;
                         var propertyType = property.PropertyType;
-                        var noSources = this.structure.WithoutAncestryForType.Contains(inputType) || this.structure.WithoutAncestryForProperty.Contains(property);
+                        var noAncestry = this.structure.WithoutAncestryForType.Contains(inputType) || this.structure.WithoutAncestryForProperty.Contains(property);
 
                         if (propertyType.IsGenericType)
                         {
@@ -457,7 +453,7 @@ namespace DataGenerator
                                         }
                                     }
 
-                                    var source = noSources ? null : GetSource(currentSource, elementType);
+                                    var source = noAncestry ? null : GetSource(currentSource, elementType);
 
                                     if (source != null)
                                     {
@@ -480,7 +476,7 @@ namespace DataGenerator
 
                                         for (var i = 0; i < elementCount; ++i)
                                         {
-                                            adder(collection, CreateObject(elementType, currentObject, currentLevel));
+                                            adder(collection, CreateObject(elementType, currentObject, currentLevel + 1));
                                         }
                                     }
                                 });
@@ -541,7 +537,7 @@ namespace DataGenerator
 
                                 if (foreignKeyNullableGetDelegates.Count == 0 || foreignKeyNullableGetDelegates.All(fkgd => fkgd.Invoke(currentObject) != null))
                                 {
-                                    foreignObject = (noSources ? null : GetSource(currentSources, propertyType)) ?? this.CreateObject(propertyType, currentObject, currentLevel);
+                                    foreignObject = (noAncestry ? null : GetSource(currentSources, propertyType)) ?? this.CreateObject(propertyType, currentObject, currentLevel + 1);
                                 }
 
                                 if (currentSingleton)
