@@ -186,25 +186,5 @@ namespace DataGenerator
 
             return result;
         }
-
-        /// <summary>
-        /// Gets the navigation property from tThis to tForeign.
-        /// </summary>
-        /// <param name="tThis">The type of this object.</param>
-        /// <param name="tForeign">The type of the foreign object.</param>
-        /// <returns></returns>
-        public PropertyInfo GetNavigation(Type tThis, Type tForeign)
-        {
-            var key = new Tuple<Type, Type>(tThis, tForeign);
-
-            if (!this.navigationProperties.TryGetValue(key, out var result))
-            {
-                result = tThis.GetProperties().SingleOrDefault(p => p.PropertyType == tForeign);
-
-                this.navigationProperties.Add(key, result);
-            }
-
-            return result;
-        }
     }
 }

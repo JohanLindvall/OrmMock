@@ -52,6 +52,7 @@
     <Compile Include="GeneratorTest.cs" />
     <Compile Include="MemDbTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RelationsTest.cs" />
     <Compile Include="SimpleValuesTest.cs" />
   </ItemGroup>
   <ItemGroup>

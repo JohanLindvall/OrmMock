@@ -62,6 +62,38 @@ namespace Test
             public virtual ICollection<TestClass4> Class4 { get; set; }
         }
 
+        public class TestClass6
+        {
+            public Guid Id { get; set; }
+
+            public Guid Class7Id { get; set; }
+
+            public Guid Class8Id { get; set; }
+
+            public TestClass7 Class7 { get; set; }
+
+            public TestClass8 Class8 { get; set; }
+
+        }
+
+        public class TestClass7
+        {
+            public Guid Id { get; set; }
+            public Guid Class8Id { get; set; }
+            public TestClass8 Class8 { get; set; }
+
+            public ICollection<TestClass6> Class6 { get; set; }
+
+        }
+
+        public class TestClass8
+        {
+            public Guid Id { get; set; }
+            public ICollection<TestClass7> Class7 { get; set; }
+
+            public ICollection<TestClass6> Class6 { get; set; }
+        }
+
         [TestMethod]
         public void TestReferences()
         {
@@ -82,6 +114,15 @@ namespace Test
         public void TestReferences3()
         {
             var result = this.ctx.CreateMany<TestClass4>(10).ToList();
+        }
+
+        [TestMethod]
+        public void TestReferences4()
+        {
+            var result = this.ctx.Create<TestClass6>();
+            var tc6 = this.ctx.GetObjects<TestClass6>().Single();
+            var tc7 = this.ctx.GetObjects<TestClass7>().Single();
+            var tc8 = this.ctx.GetObjects<TestClass8>().Single();
         }
 
         [TestMethod]
