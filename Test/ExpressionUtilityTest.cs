@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Linq;
-using DataGenerator;
 using NUnit.Framework;
+using OrmMock;
 
 namespace Test
 {

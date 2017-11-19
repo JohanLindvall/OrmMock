@@ -7,8 +7,8 @@
     <ProjectGuid>{466CDB2E-03A6-4011-8A24-D8886828FC53}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>DataGenerator</RootNamespace>
-    <AssemblyName>DataGenerator</AssemblyName>
+    <RootNamespace>OrmMock</RootNamespace>
+    <AssemblyName>OrmMock</AssemblyName>
     <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>

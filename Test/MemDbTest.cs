@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using DataGenerator;
 using NUnit.Framework;
+using OrmMock;
 
 namespace Test
 {

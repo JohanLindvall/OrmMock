@@ -1,6 +1,6 @@
 ﻿using System;
-using DataGenerator;
 using NUnit.Framework;
+using OrmMock;
 
 namespace Test
 {

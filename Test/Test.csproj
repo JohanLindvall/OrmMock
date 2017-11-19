@@ -55,9 +55,9 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\DataGenerator\DataGenerator.csproj">
+    <ProjectReference Include="..\DataGenerator\OrmMock.csproj">
       <Project>{466cdb2e-03a6-4011-8a24-d8886828fc53}</Project>
-      <Name>DataGenerator</Name>
+      <Name>OrmMock</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VSToolsPath)\TeamTest\Microsoft.TestTools.targets" Condition="Exists('$(VSToolsPath)\TeamTest\Microsoft.TestTools.targets')" />
