@@ -489,10 +489,6 @@ namespace DataGenerator
                             var foreignKeyProps = this.structure.Relations.GetForeignKeys(inputType, propertyType);
                             var primaryKeyProps = this.structure.Relations.GetPrimaryKeys(inputType);
 
-                            if (foreignKeyProps == null)
-                            {
-                                throw new InvalidOperationException($@"Unable to determine foreign keys from '{inputType.Name}' to '{propertyType.Name}'.");
-                            }
 
                             // Pass 1, only handle the case where the foreign key props and the primary key props are equal.
                             if (foreignKeyProps.SequenceEqual(primaryKeyProps))
@@ -505,13 +501,6 @@ namespace DataGenerator
                             else if (pass == 1)
                             {
                                 continue;
-                            }
-
-                            var primaryKeysOfForeignObject = this.structure.Relations.GetPrimaryKeys(propertyType);
-
-                            if (primaryKeysOfForeignObject == null)
-                            {
-                                throw new InvalidOperationException($@"Unable to determine primary keys for '{propertyType.Name}'.");
                             }
 
                             var foreignKeySetDelegates = foreignKeyProps.Select(fkp => inputType.DelegateForSetPropertyValue(fkp.Name)).ToList();

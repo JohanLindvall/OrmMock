@@ -9,12 +9,15 @@ namespace Test
     [TestFixture]
     public class GeneratorTest
     {
+        private Generator generator;
+
         private ObjectContext ctx;
 
         [SetUp]
         public void Setup()
         {
-            this.ctx = new Generator().CreateContext();
+            this.generator = new Generator();
+            this.ctx = this.generator.CreateContext();
         }
 
         public class TestClass1
@@ -79,7 +82,9 @@ namespace Test
         public class TestClass7
         {
             public Guid Id { get; set; }
+
             public Guid Class8Id { get; set; }
+
             public TestClass8 Class8 { get; set; }
 
             public ICollection<TestClass6> Class6 { get; set; }
@@ -109,6 +114,46 @@ namespace Test
             public Guid Id { get; set; }
 
             public ICollection<TestNullable1> Nullable1 { get; set; }
+        }
+
+        public class TestCircularClass
+        {
+            public int Id { get; set; }
+
+            public TestCircularClass2 Circular { get; set; }
+
+            public int CircularId { get; set; }
+        }
+
+        public class TestCircularClass2
+        {
+            public int Id { get; set; }
+
+            public ICollection<TestCircularClass> Circulars { get; set; }
+
+            public int CircularId { get; set; }
+
+
+            public TestCircularClass3 Circular { get; set; }
+        }
+
+        public class TestCircularClass3
+        {
+            public int Id { get; set; }
+
+            public ICollection<TestCircularClass2> Circulars { get; set; }
+
+            public int CircularId { get; set; }
+
+
+            public TestCircularClass Circular { get; set; }
+        }
+
+        public class SimpleClass
+        {
+            public string Prop1 { get; set; }
+
+            public string Prop2 { get; set; }
         }
 
         [Test]
@@ -156,10 +201,95 @@ namespace Test
         }
 
         [Test]
+        public void TestSingleton()
+        {
+            this.generator.Singleton<TestClass2>();
+
+            var result = this.ctx.CreateMany<TestClass1>(10).ToList();
+
+            var singleton = this.ctx.GetSingleton<TestClass2>();
+
+            Assert.IsTrue(result.All(t => object.ReferenceEquals(t.Class2, singleton)));
+        }
+
+        [Test]
+        public void TestSingleton2()
+        {
+            var singleton = new TestClass2
+            {
+                Id = 123
+            };
+            this.ctx.Singleton(singleton);
+
+            var result = this.ctx.CreateMany<TestClass1>(10).ToList();
+
+            Assert.IsTrue(result.All(t => object.ReferenceEquals(t.Class2, singleton)));
+        }
+
+        [Test]
+        public void TestCircular()
+        {
+            Assert.Throws<System.InvalidOperationException>(() => this.ctx.Create<TestCircularClass>());
+        }
+
+        [Test]
+        public void TestLimit()
+        {
+            this.ctx.CreateMany<SimpleClass>(this.ctx.ObjectLimit).ToList();
+            Assert.Throws<System.InvalidOperationException>(() => this.ctx.Create<SimpleClass>());
+        }
+
+        [Test]
+        public void TestCustomSetter()
+        {
+            this.generator.With<string>(() => "str");
+            var obj = this.ctx.Create<SimpleClass>();
+            Assert.AreEqual("str", obj.Prop1);
+            Assert.AreEqual("str", obj.Prop2);
+        }
+
+        [Test]
+        public void TestCustomProperty()
+        {
+            this.generator.With<string>(() => "str");
+            this.generator.With<SimpleClass, string>(sc => sc.Prop1, _ => "str1");
+            this.generator.With<SimpleClass, string>(sc => sc.Prop2, _ => "str2");
+            var obj = this.ctx.Create<SimpleClass>();
+            Assert.AreEqual("str1", obj.Prop1);
+            Assert.AreEqual("str2", obj.Prop2);
+        }
+
+        [Test]
+        public void TestWithoutType()
+        {
+            this.generator.Without<string>();
+            var obj = this.ctx.Create<SimpleClass>();
+            Assert.IsNull(obj.Prop1);
+            Assert.IsNull(obj.Prop2);
+        }
+
+        [Test]
+        public void TestWithoutProperty()
+        {
+            this.generator.Without<SimpleClass>(sc => sc.Prop2);
+            var obj = this.ctx.Create<SimpleClass>();
+            Assert.IsNotEmpty(obj.Prop1);
+            Assert.IsNull(obj.Prop2);
+        }
+
+        [Test]
         public void TestConstructor()
         {
             var result = this.ctx.Create<TestClass3>();
             Assert.IsNotNull(result);
+        }
+
+        [Test]
+        public void TestInclude()
+        {
+            this.generator.Include<TestClass2>(tc => tc.Class1, 2);
+            var obj = this.ctx.Create<TestClass2>();
+            Assert.AreEqual(2, obj.Class1.Count);
         }
     }
 }
