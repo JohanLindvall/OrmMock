@@ -62,11 +62,10 @@ namespace Test
 
             var fk1 = this.relations.GetForeignKeys(typeof(TestClass3), typeof(TestClass1));
             var fk2 = this.relations.GetForeignKeys(typeof(TestClass3), typeof(TestClass2));
-            var fk3 = this.relations.GetForeignKeys(typeof(TestClass1), typeof(TestClass2));
+            Assert.Throws<InvalidOperationException>(() => this.relations.GetForeignKeys(typeof(TestClass1), typeof(TestClass2)));
 
             CollectionAssert.AreEqual(new[] { typeof(TestClass3).GetProperty(nameof(TestClass3.TestClass1Id)) }, fk1);
             CollectionAssert.AreEqual(new[] { typeof(TestClass3).GetProperty(nameof(TestClass3.TestClass2Id1)), typeof(TestClass3).GetProperty(nameof(TestClass3.TestClass2Id2)) }, fk2);
-            Assert.IsNull(fk3);
         }
 
         [Test]

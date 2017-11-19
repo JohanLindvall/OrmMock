@@ -41,11 +41,6 @@ namespace DataGenerator
         /// </summary>
         private readonly Dictionary<Tuple<Type, Type>, PropertyInfo[]> foreignKeys = new Dictionary<Tuple<Type, Type>, PropertyInfo[]>();
 
-        /// <summary>
-        /// Holds the dictionary of type, type to foreign key properties
-        /// </summary>
-        private readonly Dictionary<Tuple<Type, Type>, PropertyInfo> navigationProperties = new Dictionary<Tuple<Type, Type>, PropertyInfo>();
-
         public Relations()
         {
             this.DefaultPrimaryKey = type =>
@@ -157,10 +152,12 @@ namespace DataGenerator
             {
                 result = this.DefaultForeignKey(tThis, tForeign);
 
-                if (result != null)
+                if (result == null)
                 {
-                    this.ValidateForeignKeys(tThis, tForeign, result);
+                    throw new InvalidOperationException($@"Unable to determine foreign keys from '{tThis.Name}' to '{tForeign.Name}'.");
                 }
+
+                this.ValidateForeignKeys(tThis, tForeign, result);
 
                 this.foreignKeys.Add(key, result);
             }
@@ -179,7 +176,13 @@ namespace DataGenerator
         {
             var primaryKeyTypes = this.GetPrimaryKeys(tForeign).Select(p => p.PropertyType);
 
-            var foreignKeyTypes = foreignKeyProperties.Select(p => Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType);
+            var foreignKeyTypes = foreignKeyProperties.Select(p => p.PropertyType).ToArray();
+
+            if (foreignKeyTypes.Count(fk => Nullable.GetUnderlyingType(fk) != null) == foreignKeyTypes.Length)
+            {
+                // All nullable
+                foreignKeyTypes = foreignKeyTypes.Select(Nullable.GetUnderlyingType).ToArray();
+            }
 
             if (!primaryKeyTypes.SequenceEqual(foreignKeyTypes))
             {

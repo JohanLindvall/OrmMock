@@ -107,8 +107,7 @@ namespace DataGenerator
         public IQueryable<T> Queryable<T>()
             where T : class
         {
-            List<object> objs;
-            if (!this.heldObjects.TryGetValue(typeof(T), out objs))
+            if (!this.heldObjects.TryGetValue(typeof(T), out var objs))
             {
                 objs = new List<object>();
             }
@@ -161,8 +160,7 @@ namespace DataGenerator
                 return;
             }
 
-            List<object> objs;
-            if (!this.heldObjects.TryGetValue(t, out objs))
+            if (!this.heldObjects.TryGetValue(t, out var objs))
             {
                 objs = new List<object>();
                 this.heldObjects.Add(t, objs);
@@ -206,8 +204,7 @@ namespace DataGenerator
 
         private int IndexOf(Type t, PropertyInfo[] kp, object[] keys)
         {
-            List<object> objs;
-            if (this.heldObjects.TryGetValue(t, out objs))
+            if (this.heldObjects.TryGetValue(t, out var objs))
             {
                 for (var idx = 0; idx < objs.Count; ++idx)
                 {

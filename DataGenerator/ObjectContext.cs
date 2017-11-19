@@ -432,7 +432,6 @@ namespace DataGenerator
                                 var hashSetCreator = collectionType.DelegateForCreateInstance();
                                 var collectionSetter = inputType.DelegateForSetPropertyValue(property.Name);
                                 var collectionGetter = inputType.DelegateForGetPropertyValue(property.Name);
-                                var foreignKeyNullableGetDelegates = this.structure.Relations.GetForeignKeys(elementType, inputType)?.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(fkp => elementType.DelegateForGetPropertyValue(fkp.Name)).ToList();
 
                                 methods.Add((currentObject, currentSource, currentLevel, currentSingleton) =>
                                 {
@@ -457,10 +456,7 @@ namespace DataGenerator
 
                                     if (source != null)
                                     {
-                                        if (foreignKeyNullableGetDelegates == null || foreignKeyNullableGetDelegates.Count == 0 || foreignKeyNullableGetDelegates.All(fkgd => fkgd.Invoke(source) != null))
-                                        {
-                                            adder(collection, source);
-                                        }
+                                        adder(collection, source);
                                     }
                                     else
                                     {
@@ -498,11 +494,6 @@ namespace DataGenerator
                                 throw new InvalidOperationException($@"Unable to determine foreign keys from '{inputType.Name}' to '{propertyType.Name}'.");
                             }
 
-                            if (primaryKeyProps == null)
-                            {
-                                throw new InvalidOperationException($@"Unable to determine primary keys for '{inputType.Name}'.");
-                            }
-
                             // Pass 1, only handle the case where the foreign key props and the primary key props are equal.
                             if (foreignKeyProps.SequenceEqual(primaryKeyProps))
                             {
@@ -528,16 +519,16 @@ namespace DataGenerator
                             var foreignObjectGetter = inputType.DelegateForGetPropertyValue(property.Name);
                             var foreignObjectSetter = inputType.DelegateForSetPropertyValue(property.Name);
 
-                            var foreignKeyNullableGetDelegates = foreignKeyProps.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(fkp => inputType.DelegateForGetPropertyValue(fkp.Name)).ToList();
+                            var foreignKeyNullableGetDelegate = foreignKeyProps.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(fkp => inputType.DelegateForGetPropertyValue(fkp.Name)).FirstOrDefault();
 
-                            methods.Add((currentObject, currentSources, currentLevel, currentSingleton) =>
+                            methods.Add((currentObject, currentSource, currentLevel, currentSingleton) =>
                             {
                                 // Handle nullable
                                 object foreignObject = null;
 
-                                if (foreignKeyNullableGetDelegates.Count == 0 || foreignKeyNullableGetDelegates.All(fkgd => fkgd.Invoke(currentObject) != null))
+                                if (foreignKeyNullableGetDelegate == null || foreignKeyNullableGetDelegate.Invoke(currentObject) != null)
                                 {
-                                    foreignObject = (noAncestry ? null : GetSource(currentSources, propertyType)) ?? this.CreateObject(propertyType, currentObject, currentLevel + 1);
+                                    foreignObject = (noAncestry ? null : GetSource(currentSource, propertyType)) ?? this.CreateObject(propertyType, currentObject, currentLevel + 1);
                                 }
 
                                 if (currentSingleton)
@@ -550,7 +541,18 @@ namespace DataGenerator
                                     }
                                 }
 
-                                if (foreignObject != null)
+                                if (foreignObject == null)
+                                {
+                                    // Clear nullable foreign keys
+                                    if (foreignKeyNullableGetDelegate != null)
+                                    {
+                                        for (var i = 0; i < foreignKeyProps.Length; ++i)
+                                        {
+                                            foreignKeySetDelegates[i](currentObject, null);
+                                        }
+                                    }
+                                }
+                                else
                                 {
                                     // Set foreign keys to primary keys of related object.
                                     for (var i = 0; i < foreignKeyProps.Length; ++i)
@@ -562,14 +564,13 @@ namespace DataGenerator
                                 }
                             });
 
-                            if (foreignKeyNullableGetDelegates.Count == 0)
+                            for (var i = foreignKeyNullableGetDelegate == null ? 0 : 1; i < foreignKeyProps.Length; i++)
                             {
-                                foreach (var foreignKeyProp in foreignKeyProps)
+                                var foreignKeyProp = foreignKeyProps[i];
+
+                                if (propertyPlacement.TryGetValue(foreignKeyProp, out var methodIndex))
                                 {
-                                    if (propertyPlacement.TryGetValue(foreignKeyProp, out var methodIndex))
-                                    {
-                                        methods[methodIndex] = null;
-                                    }
+                                    methods[methodIndex] = null;
                                 }
                             }
                         }

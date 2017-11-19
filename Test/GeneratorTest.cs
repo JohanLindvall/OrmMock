@@ -94,6 +94,23 @@ namespace Test
             public ICollection<TestClass6> Class6 { get; set; }
         }
 
+        public class TestNullable1
+        {
+
+            public Guid Id { get; set; }
+
+            public Guid? Nullable2Id { get; set; }
+
+            public TestNullable2 Nullable2 { get; set; }
+        }
+
+        public class TestNullable2
+        {
+            public Guid Id { get; set; }
+
+            public ICollection<TestNullable1> Nullable1 { get; set; }
+        }
+
         [Test]
         public void TestReferences()
         {
@@ -123,6 +140,19 @@ namespace Test
             var tc6 = this.ctx.GetObjects<TestClass6>().Single();
             var tc7 = this.ctx.GetObjects<TestClass7>().Single();
             // var tc8 = this.ctx.GetObjects<TestClass8>().Single();
+        }
+
+        [Test]
+        public void TestNullable()
+        {
+            this.ctx.ObjectLimit = 9999;
+            var result = this.ctx.CreateMany<TestNullable1>(1000).ToList();
+
+            var nonNullCount = result.Count(t => t.Nullable2 != null);
+            var nullCount = result.Count(t => t.Nullable2 == null);
+
+            Assert.NotZero(nonNullCount);
+            Assert.NotZero(nullCount);
         }
 
         [Test]
