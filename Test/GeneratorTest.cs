@@ -99,6 +99,21 @@ namespace Test
             public ICollection<TestClass6> Class6 { get; set; }
         }
 
+
+        public class TestClass9
+        {
+            public Guid Id { get; set; }
+
+            public TestClass10 Class10 { get; set; }
+        }
+
+        public class TestClass10
+        {
+            public Guid Id { get; set; }
+
+            public TestClass9 Class9 { get; set; }
+        }
+
         public class TestNullable1
         {
 
@@ -227,6 +242,15 @@ namespace Test
         }
 
         [Test]
+        public void TestSingletonReferenceMismatch()
+        {
+            this.generator.Include<TestClass2>(tc => tc.Class1, 1);
+            var obj1 = this.ctx.Create<TestClass2>();
+            this.ctx.Singleton(this.ctx.GetObject<TestClass1>());
+            Assert.Throws<InvalidOperationException>(() => this.ctx.Create<TestClass2>());
+        }
+
+        [Test]
         public void TestCircular()
         {
             Assert.Throws<System.InvalidOperationException>(() => this.ctx.Create<TestCircularClass>());
@@ -290,6 +314,15 @@ namespace Test
             this.generator.Include<TestClass2>(tc => tc.Class1, 2);
             var obj = this.ctx.Create<TestClass2>();
             Assert.AreEqual(2, obj.Class1.Count);
+        }
+
+        [Test]
+        public void Test11Relation()
+        {
+            this.generator.Relations.Register11Relation<TestClass9, TestClass10>(tc => tc.Id, tc => tc.Id);
+
+            var obj = this.ctx.Create<TestClass9>();
+            Assert.AreEqual(2, this.ctx.GetObjects().Count());
         }
     }
 }

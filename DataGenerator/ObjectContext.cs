@@ -122,6 +122,16 @@ namespace DataGenerator
         }
 
         /// <summary>
+        /// Gets the object of the specified type..
+        /// </summary>
+        /// <typeparam name="T">The type of the object.</typeparam>
+        /// <returns>The object at the given index.</returns>
+        public T GetObject<T>()
+        {
+            return (T)this.createdObjects.Single(o => o.GetType() == typeof(T));
+        }
+
+        /// <summary>
         /// Gets the object of the specified type at the given index.
         /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
@@ -290,14 +300,14 @@ namespace DataGenerator
 
                     var constructorDelegate = ctor.DelegateForCreateInstance();
 
-                    var handleSingleton = this.structure.Singletons.Contains(objectType) || this.singletons.ContainsKey(objectType);
-
                     constructor = (localSource, localLevel) =>
                     {
                         if (localLevel >= this.RecursionLimit)
                         {
                             throw new InvalidOperationException($@"Recursion limit of {this.RecursionLimit} exceeded.");
                         }
+
+                        var handleSingleton = this.structure.Singletons.Contains(objectType) || this.singletons.ContainsKey(objectType);
 
                         if (handleSingleton && this.singletons.TryGetValue(objectType, out object singleton))
                         {
