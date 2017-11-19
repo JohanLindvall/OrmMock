@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>JohanLindvall.OrmMock</id>
+    <version>1.0.0</version>
+    <authors>Johan Lindvall</authors>
+    <owners>Johan Lindvall</owners>
+    <licenseUrl>http://www.opensource.org/licenses/mit-license.php</licenseUrl>
+    <projectUrl>https://github.com/JohanLindvall/OrmMock</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>ORM Mock data generator and in-memory database.</description>
+    <copyright>Copyright 2017</copyright>
+    <tags>ORM Mock data</tags>
+    <dependencies>
+      <dependency id="fasterflect" version="2.1.3" />
+    </dependencies>
+  </metadata>
+</package>
