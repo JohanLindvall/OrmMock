@@ -174,6 +174,16 @@ namespace DataGenerator
         /// <summary>
         /// Creates an object of the given type.
         /// </summary>
+        /// <param name="t">The type of the object.</param>
+        /// <returns>The created object.</returns>
+        public object Create(Type t)
+        {
+            return CreateObject(t, new List<object>(), 0);
+        }
+
+        /// <summary>
+        /// Creates an object of the given type.
+        /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <typeparam name="T2">The type of the parameter.</typeparam>
         /// <param name="e">The setter expression</param>
@@ -373,7 +383,7 @@ namespace DataGenerator
                         continue;
                     }
 
-                    if (this.structure.CustomPropertySetters.TryGetValue(property, out Func<object, object> valueFunc))
+                    if (this.structure.CustomPropertySetters.TryGetValue(property, out var valueFunc))
                     {
                         propertyPlacement.Add(property, methods.Count);
                         var setterDelegate = inputType.DelegateForSetPropertyValue(property.Name);
@@ -381,7 +391,7 @@ namespace DataGenerator
                         {
                             if (!currentSingleton)
                             {
-                                setterDelegate(currentObject, valueFunc(currentObject));
+                                setterDelegate(currentObject, valueFunc(this));
                             }
                         });
 
@@ -586,7 +596,7 @@ namespace DataGenerator
         {
             if (this.structure.CustomConstructors.TryGetValue(t, out var creator))
             {
-                return s => creator(s);
+                return s => creator(this, s);
             }
 
             if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>))

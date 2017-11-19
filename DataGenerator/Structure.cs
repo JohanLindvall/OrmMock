@@ -67,12 +67,12 @@ namespace DataGenerator
         /// <summary>
         /// Holds the dictionary of custom property setters.
         /// </summary>
-        public Dictionary<PropertyInfo, Func<object, object>> CustomPropertySetters { get; } = new Dictionary<PropertyInfo, Func<object, object>>();
+        public Dictionary<PropertyInfo, Func<ObjectContext, object>> CustomPropertySetters { get; } = new Dictionary<PropertyInfo, Func<ObjectContext, object>>();
 
         /// <summary>
         /// Holds the dictionary of custom constructors.
         /// </summary>
-        public Dictionary<Type, Func<string, object>> CustomConstructors { get; } = new Dictionary<Type, Func<string, object>>();
+        public Dictionary<Type, Func<ObjectContext, string, object>> CustomConstructors { get; } = new Dictionary<Type, Func<ObjectContext, string, object>>();
 
         /// <summary>
         /// Holds the relations

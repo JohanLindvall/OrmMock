@@ -138,14 +138,33 @@ namespace DataGenerator
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <typeparam name="T2">The property value.</typeparam>
         /// <param name="e">The property expression.</param>
-        /// <param name="value">The value generator.</param>
+        /// <param name="value">The value.</param>
         /// <returns>The generator.</returns>
-        public Generator With<T, T2>(Expression<Func<T, T2>> e, Func<T, T2> value)
+        public Generator With<T, T2>(Expression<Func<T, T2>> e, T2 value)
             where T : class
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(e))
             {
-                this.structure.CustomPropertySetters.Add(property, o => value((T)o));
+                this.structure.CustomPropertySetters.Add(property, _ => value);
+            }
+
+            return this;
+        }
+
+        /// <summary>
+        /// Sets a property to a specific value.
+        /// </summary>
+        /// <typeparam name="T">The type of the object.</typeparam>
+        /// <typeparam name="T2">The property value.</typeparam>
+        /// <param name="e">The property expression.</param>
+        /// <param name="value">The value generator.</param>
+        /// <returns>The generator.</returns>
+        public Generator With<T, T2>(Expression<Func<T, T2>> e, Func<ObjectContext, T2> value)
+            where T : class
+        {
+            foreach (var property in ExpressionUtility.GetPropertyInfo(e))
+            {
+                this.structure.CustomPropertySetters.Add(property, ctx => value(ctx));
             }
 
             return this;
@@ -159,7 +178,7 @@ namespace DataGenerator
         /// <returns>The generator.</returns>
         public Generator With<T>(Func<T> creator)
         {
-            this.structure.CustomConstructors.Add(typeof(T), _ => creator());
+            this.structure.CustomConstructors.Add(typeof(T), (_, __) => creator());
 
             return this;
         }
@@ -172,7 +191,7 @@ namespace DataGenerator
         /// <returns>The generator.</returns>
         public Generator With<T>(Func<string, T> creator)
         {
-            this.structure.CustomConstructors.Add(typeof(T), s => creator(s));
+            this.structure.CustomConstructors.Add(typeof(T), (_, s) => creator(s));
 
             return this;
         }
