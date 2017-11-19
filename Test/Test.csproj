@@ -55,7 +55,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\DataGenerator\OrmMock.csproj">
+    <ProjectReference Include="..\OrmMock\OrmMock.csproj">
       <Project>{466cdb2e-03a6-4011-8a24-d8886828fc53}</Project>
       <Name>OrmMock</Name>
     </ProjectReference>
