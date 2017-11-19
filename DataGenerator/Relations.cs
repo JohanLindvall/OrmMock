@@ -173,31 +173,15 @@ namespace DataGenerator
         /// </summary>
         /// <param name="tThis">The type of the object.</param>
         /// <param name="tForeign">The type of the foreign object.</param>
-        /// <param name="result">The forein keys</param>
+        /// <param name="foreignKeyProperties">The foreign keys</param>
 
-        private void ValidateForeignKeys(Type tThis, Type tForeign, PropertyInfo[] foreignKeys)
+        private void ValidateForeignKeys(Type tThis, Type tForeign, PropertyInfo[] foreignKeyProperties)
         {
-            var primary = this.GetPrimaryKeys(tForeign);
+            var primaryKeyTypes = this.GetPrimaryKeys(tForeign).Select(p => p.PropertyType);
 
-            var mismatch = false;
+            var foreignKeyTypes = foreignKeyProperties.Select(p => Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType);
 
-            if (foreignKeys.Length != primary.Length)
-            {
-                mismatch = true;
-            }
-            else
-            {
-                for (var i = 0; i < foreignKeys.Length; ++i)
-                {
-                    if (!object.ReferenceEquals(Nullable.GetUnderlyingType(foreignKeys[i].PropertyType) ?? foreignKeys[i].PropertyType, primary[i].PropertyType))
-                    {
-                        mismatch = true;
-                        break;
-                    }
-                }
-            }
-
-            if (mismatch)
+            if (!primaryKeyTypes.SequenceEqual(foreignKeyTypes))
             {
                 throw new InvalidOperationException($"Primary keys and foreign keys for '{tForeign}' in '{tThis}' do not match.");
             }

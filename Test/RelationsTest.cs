@@ -74,5 +74,18 @@ namespace Test
         {
             Assert.Throws<InvalidOperationException>(() => this.relations.RegisterForeignKeys<TestClass3, TestClass1>(tc => tc.TestClass2Id2));
         }
+
+        [Test]
+        public void Test11Relation()
+        {
+            this.relations.RegisterPrimaryKeys<TestClass2>(tc => tc.Id1);
+            this.relations.Register11Relation<TestClass1, TestClass2>(tc => tc.Id, tc => tc.Id1);
+
+            var fk1 = this.relations.GetForeignKeys(typeof(TestClass1), typeof(TestClass2));
+            var fk2 = this.relations.GetForeignKeys(typeof(TestClass2), typeof(TestClass1));
+
+            CollectionAssert.AreEqual(new[] { typeof(TestClass1).GetProperty(nameof(TestClass1.Id)) }, fk1);
+            CollectionAssert.AreEqual(new[] { typeof(TestClass2).GetProperty(nameof(TestClass2.Id1)) }, fk2);
+        }
     }
 }

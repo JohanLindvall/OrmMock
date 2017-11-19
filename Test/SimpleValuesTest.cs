@@ -98,6 +98,14 @@ namespace Test
         }
 
         [Test]
+        public void TestDateTime()
+        {
+            var val = this.GetValue<DateTime>();
+
+            Assert.IsTrue(val >= DateTime.MinValue && val <= DateTime.MaxValue, $@"Bad value {val}");
+        }
+
+        [Test]
         public void TestDateTimeOffset()
         {
             var val = this.GetValue<DateTimeOffset>();
