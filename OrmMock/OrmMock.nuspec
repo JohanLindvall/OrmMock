@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>JohanLindvall.OrmMock</id>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <authors>Johan Lindvall</authors>
     <owners>Johan Lindvall</owners>
     <licenseUrl>http://www.opensource.org/licenses/mit-license.php</licenseUrl>
