@@ -46,7 +46,6 @@ namespace OrmMock
         /// <param name="e">The expression func for the object.</param>
         /// <returns>The generator.</returns>
         public Generator Without<T>(Expression<Func<T, object>> e)
-            where T : class
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(e))
             {
@@ -75,7 +74,6 @@ namespace OrmMock
         /// <param name="e">The expression func for the object.</param>
         /// <returns>The generator.</returns>
         public Generator WithoutAncestry<T>(Expression<Func<T, object>> e)
-            where T : class
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(e))
             {
@@ -117,7 +115,6 @@ namespace OrmMock
         /// <param name="count">The number of items to create. Default is 3.</param>
         /// <returns>The generator.</returns>
         public Generator Include<T>(Expression<Func<T, object>> e, int count = 3)
-            where T : class
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(e))
             {
@@ -141,7 +138,6 @@ namespace OrmMock
         /// <param name="value">The value.</param>
         /// <returns>The generator.</returns>
         public Generator With<T, T2>(Expression<Func<T, T2>> e, T2 value)
-            where T : class
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(e))
             {
@@ -160,7 +156,6 @@ namespace OrmMock
         /// <param name="value">The value generator.</param>
         /// <returns>The generator.</returns>
         public Generator With<T, T2>(Expression<Func<T, T2>> e, Func<ObjectContext, T2> value)
-            where T : class
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(e))
             {

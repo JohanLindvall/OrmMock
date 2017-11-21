@@ -200,7 +200,6 @@ namespace OrmMock
         /// <param name="value">The value</param>
         /// <returns>The created object.</returns>
         public T Create<T, T2>(Expression<Func<T, T2>> e, T2 value)
-            where T : class
         {
             var result = this.Create<T>();
 
@@ -218,7 +217,6 @@ namespace OrmMock
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <returns>The created objects.</returns>
         public IEnumerable<T> CreateMany<T>(int create = 3)
-            where T : new()
         {
             while (create-- > 0)
             {
@@ -235,7 +233,6 @@ namespace OrmMock
         /// <param name="values">The values</param>
         /// <returns>The created objects.</returns>
         public IEnumerable<T> CreateMany<T, T2>(Expression<Func<T, T2>> e, params T2[] values)
-            where T : class, new()
         {
             foreach (var value in values)
             {

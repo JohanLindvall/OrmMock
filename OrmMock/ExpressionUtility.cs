@@ -38,7 +38,6 @@ namespace OrmMock
         /// <param name="expression">The expression.</param>
         /// <returns>An array of property infos.</returns>
         public static PropertyInfo[] GetPropertyInfo<T, T2>(Expression<Func<T, T2>> expression)
-            where T : class
         {
             var body = expression.Body;
             var ue = body as UnaryExpression;
