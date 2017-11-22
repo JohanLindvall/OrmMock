@@ -326,7 +326,7 @@ namespace OrmMock
 
                         ctorParameters.Add(localSourceObjects =>
                         {
-                            var source = noAncestry ? null : GetSource(localSourceObjects, constructorParameterType);
+                            var source = noAncestry ? null : GetSource(localSourceObjects, constructorParameterType, int.MaxValue);
                             return source ?? CreateObject(constructorParameterType, localSourceObjects);
                         });
                     }
@@ -350,12 +350,6 @@ namespace OrmMock
                             return singleton;
                         }
 
-                        if (this.Logging)
-                        {
-                            var diag = $"{new string(' ', 4 * localSources.Count)}{objectType}";
-                            Console.WriteLine(diag);
-                        }
-
                         if (++this.objectCount > this.ObjectLimit)
                         {
                             throw new InvalidOperationException($"Attempt to create more than {this.ObjectLimit} objects.");
@@ -370,6 +364,14 @@ namespace OrmMock
                         if (handleSingleton)
                         {
                             this.singletons[objectType] = result;
+                        }
+
+                        if (this.Logging)
+                        {
+                            var pkstr = string.Join(", ", this.structure.Relations.GetPrimaryKeys(objectType).Select(k => k.GetMethod.Invoke(result, new object[0]).ToString()));
+
+                            var diag = $"{new string(' ', 4 * localSources.Count)}{objectType} {pkstr}";
+                            Console.WriteLine(diag);
                         }
 
                         return result;
@@ -387,10 +389,11 @@ namespace OrmMock
         /// </summary>
         /// <param name="sources">The existing object.</param>
         /// <param name="sourceType">The source type.</param>
+        /// <param name="maxLevel">The maximum level.</param>
         /// <returns>An exisiting object or null.</returns>
-        private object GetSource(IList<object> sources, Type sourceType)
+        private object GetSource(IList<object> sources, Type sourceType, int maxLevel)
         {
-            for (var i = sources.Count - 1; i >= 0; --i)
+            for (var i = sources.Count - 1; i >= 0 && maxLevel > 0; --i, --maxLevel)
             {
                 if (sources[i].GetType() == sourceType)
                 {
@@ -507,7 +510,7 @@ namespace OrmMock
                                         }
                                     }
 
-                                    var source = noAncestry ? null : GetSource(currentSources, elementType);
+                                    var source = noAncestry ? null : GetSource(currentSources, elementType, 1);
 
                                     if (source != null)
                                     {
@@ -577,7 +580,7 @@ namespace OrmMock
 
                                 if (foreignKeyNullableGetDelegate == null || foreignKeyNullableGetDelegate.Invoke(currentObject) != null)
                                 {
-                                    foreignObject = (noAncestry ? null : GetSource(currentSources, propertyType));
+                                    foreignObject = (noAncestry ? null : GetSource(currentSources, propertyType, int.MaxValue));
 
                                     if (foreignObject == null)
                                     {
