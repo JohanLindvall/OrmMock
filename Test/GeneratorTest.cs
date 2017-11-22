@@ -323,6 +323,28 @@ namespace Test
 
             var obj = this.ctx.Create<TestClass9>();
             Assert.AreEqual(2, this.ctx.GetObjects().Count());
+            Assert.AreNotEqual(Guid.Empty, obj.Id);
+            Assert.AreNotEqual(Guid.Empty, obj.Class10.Id);
+        }
+
+        [Test]
+        public void TestCreateString()
+        {
+            for (int i = 0; i < 30; ++i)
+            {
+                var s = this.ctx.CreateString(i);
+                Assert.AreEqual(i, s.Length);
+            }
+        }
+
+        [Test]
+        public void TestCreateStringPrefix()
+        {
+            for (int i = 0; i < 30; ++i)
+            {
+                var s = this.ctx.CreateString("xx", i);
+                Assert.AreEqual(i, s.Length);
+            }
         }
     }
 }

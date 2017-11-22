@@ -241,6 +241,43 @@ namespace OrmMock
         }
 
         /// <summary>
+        /// Creates a string of the given length.
+        /// </summary>
+        /// <param name="length">The string length.</param>
+        /// <returns>A random string.</returns>
+        public string CreateString(int length)
+        {
+            return this.CreateString(string.Empty, length);
+        }
+
+        /// <summary>
+        /// Creates a random string with the given prefix and maximum length.
+        /// </summary>
+        /// <param name="prefix">The prefix</param>
+        /// <param name="length">The maximum length</param>
+        /// <returns>A random string.</returns>
+        public string CreateString(string prefix, int length)
+        {
+            var ba = Math.Max(0, length - prefix.Length);
+            ba *= 3;
+            if (ba % 4 != 0)
+            {
+                ba += 4;
+            }
+            ba /= 4;
+
+            var rnd = new byte[ba];
+            this.random.NextBytes(rnd);
+            var result = prefix + Convert.ToBase64String(rnd);
+            if (result.Length > length)
+            {
+                result = result.Substring(0, length);
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// Creates an object of type t, considering the sources for references.
         /// </summary>
         /// <param name="objectType">The type of the object to create.</param>
@@ -506,9 +543,10 @@ namespace OrmMock
                             var foreignKeyProps = this.structure.Relations.GetForeignKeys(inputType, propertyType);
                             var primaryKeyProps = this.structure.Relations.GetPrimaryKeys(inputType);
 
+                            var pkFkEqual = foreignKeyProps.SequenceEqual(primaryKeyProps);
 
                             // Pass 1, only handle the case where the foreign key props and the primary key props are equal.
-                            if (foreignKeyProps.SequenceEqual(primaryKeyProps))
+                            if (pkFkEqual)
                             {
                                 if (pass == 2)
                                 {
@@ -570,13 +608,16 @@ namespace OrmMock
                                 }
                             });
 
-                            for (var i = foreignKeyNullableGetDelegate == null ? 0 : 1; i < foreignKeyProps.Length; i++)
+                            if (!pkFkEqual)
                             {
-                                var foreignKeyProp = foreignKeyProps[i];
-
-                                if (propertyPlacement.TryGetValue(foreignKeyProp, out var methodIndex))
+                                for (var i = foreignKeyNullableGetDelegate == null ? 0 : 1; i < foreignKeyProps.Length; i++)
                                 {
-                                    methods[methodIndex] = null;
+                                    var foreignKeyProp = foreignKeyProps[i];
+
+                                    if (propertyPlacement.TryGetValue(foreignKeyProp, out var methodIndex))
+                                    {
+                                        methods[methodIndex] = null;
+                                    }
                                 }
                             }
                         }
@@ -635,12 +676,7 @@ namespace OrmMock
             }
             else if (t == typeof(string))
             {
-                return s =>
-                {
-                    var rnd = new byte[21];
-                    this.random.NextBytes(rnd);
-                    return s + Convert.ToBase64String(rnd);
-                };
+                return s => this.CreateString(s, s.Length + 24);
             }
             else if (t == typeof(byte))
             {
