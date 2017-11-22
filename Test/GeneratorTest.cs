@@ -253,7 +253,8 @@ namespace Test
         [Test]
         public void TestCircular()
         {
-            Assert.Throws<System.InvalidOperationException>(() => this.ctx.Create<TestCircularClass>());
+            var objs = this.ctx.Create<TestCircularClass>();
+            Assert.AreEqual(3, this.ctx.GetObjects().Count());
         }
 
         [Test]

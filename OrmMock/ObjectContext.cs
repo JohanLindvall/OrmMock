@@ -51,12 +51,12 @@ namespace OrmMock
         /// <summary>
         /// Holds the method property cache.
         /// </summary>
-        private readonly Dictionary<Type, List<Action<object, object, int, bool>>> methodPropertyCache = new Dictionary<Type, List<Action<object, object, int, bool>>>();
+        private readonly Dictionary<Type, List<Action<object, IList<object>, bool>>> methodPropertyCache = new Dictionary<Type, List<Action<object, IList<object>, bool>>>();
 
         /// <summary>
         /// Holds the constructor cache for the given type.
         /// </summary>
-        private readonly Dictionary<Type, Func<object, int, object>> constructorCache = new Dictionary<Type, Func<object, int, object>>();
+        private readonly Dictionary<Type, Func<IList<object>, object>> constructorCache = new Dictionary<Type, Func<IList<object>, object>>();
 
         /// <summary>
         /// Holds the structure data.
@@ -178,7 +178,7 @@ namespace OrmMock
         /// <returns>The created object.</returns>
         public T Create<T>()
         {
-            return (T)CreateObject(typeof(T), new List<object>(), 0);
+            return (T)CreateObject(typeof(T), new List<object>());
         }
 
         /// <summary>
@@ -188,7 +188,7 @@ namespace OrmMock
         /// <returns>The created object.</returns>
         public object Create(Type t)
         {
-            return CreateObject(t, new List<object>(), 0);
+            return CreateObject(t, new List<object>());
         }
 
         /// <summary>
@@ -281,10 +281,9 @@ namespace OrmMock
         /// Creates an object of type t, considering the sources for references.
         /// </summary>
         /// <param name="objectType">The type of the object to create.</param>
-        /// <param name="sourceObject">The sources.</param>
-        /// <param name="level">The recursion level.</param>
+        /// <param name="sourceObjects">The sources.</param>
         /// <returns></returns>
-        private object CreateObject(Type objectType, object sourceObject, int level)
+        private object CreateObject(Type objectType, IList<object> sourceObjects)
         {
             if (!this.constructorCache.TryGetValue(objectType, out var constructor))
             {
@@ -292,7 +291,7 @@ namespace OrmMock
 
                 if (simpleCreator != null)
                 {
-                    constructor = (_, __) => simpleCreator(string.Empty);
+                    constructor = _ => simpleCreator(string.Empty);
                 }
                 else
                 {
@@ -303,7 +302,7 @@ namespace OrmMock
                         throw new InvalidOperationException($@"Cannot construct {objectType.Name}.");
                     }
 
-                    var ctorParameters = new List<Func<object, int, object>>();
+                    var ctorParameters = new List<Func<IList<object>, object>>();
 
                     foreach (var constructorParameter in ctor.GetParameters())
                     {
@@ -311,7 +310,7 @@ namespace OrmMock
 
                         if (this.structure.WithoutType.Contains(constructorParameterType))
                         {
-                            ctorParameters.Add((_, __) => null);
+                            ctorParameters.Add(_ => null);
                             continue;
                         }
 
@@ -319,24 +318,24 @@ namespace OrmMock
 
                         if (valueCreator != null)
                         {
-                            ctorParameters.Add((_, __) => valueCreator(objectType.Name));
+                            ctorParameters.Add(_ => valueCreator(objectType.Name));
                             continue;
                         }
 
                         var noAncestry = this.structure.WithoutAncestryForType.Contains(constructorParameterType) || this.structure.WithoutAncestryForConstructor.Contains(constructorParameterType);
 
-                        ctorParameters.Add((localSourceObject, localLevel) =>
+                        ctorParameters.Add(localSourceObjects =>
                         {
-                            var source = noAncestry ? null : GetSource(localSourceObject, constructorParameterType);
-                            return source ?? CreateObject(constructorParameterType, localSourceObject, localLevel);
+                            var source = noAncestry ? null : GetSource(localSourceObjects, constructorParameterType);
+                            return source ?? CreateObject(constructorParameterType, localSourceObjects);
                         });
                     }
 
                     var constructorDelegate = ctor.DelegateForCreateInstance();
 
-                    constructor = (localSource, localLevel) =>
+                    constructor = localSources =>
                     {
-                        if (localLevel >= this.RecursionLimit)
+                        if (localSources.Count >= this.RecursionLimit)
                         {
                             throw new InvalidOperationException($@"Recursion limit of {this.RecursionLimit} exceeded.");
                         }
@@ -346,14 +345,14 @@ namespace OrmMock
                         if (handleSingleton && this.singletons.TryGetValue(objectType, out object singleton))
                         {
                             // Register possible back references in singleton.
-                            this.SetProperties(singleton, localSource, objectType, true, localLevel);
+                            this.SetProperties(singleton, localSources, objectType, true);
 
                             return singleton;
                         }
 
                         if (this.Logging)
                         {
-                            var diag = $"{new string(' ', 4 * localLevel)}{objectType}";
+                            var diag = $"{new string(' ', 4 * localSources.Count)}{objectType}";
                             Console.WriteLine(diag);
                         }
 
@@ -362,11 +361,11 @@ namespace OrmMock
                             throw new InvalidOperationException($"Attempt to create more than {this.ObjectLimit} objects.");
                         }
 
-                        var result = constructorDelegate(ctorParameters.Select(ca => ca(localSource, localLevel)).ToArray());
+                        var result = constructorDelegate(ctorParameters.Select(ca => ca(localSources)).ToArray());
 
                         this.createdObjects.Add(result);
 
-                        this.SetProperties(result, localSource, objectType, false, localLevel);
+                        this.SetProperties(result, localSources, objectType, false);
 
                         if (handleSingleton)
                         {
@@ -380,20 +379,23 @@ namespace OrmMock
                 this.constructorCache.Add(objectType, constructor);
             }
 
-            return constructor(sourceObject, level);
+            return constructor(sourceObjects);
         }
 
         /// <summary>
         /// Gets an existing object of the given type from the sources list.
         /// </summary>
-        /// <param name="source">The existing object.</param>
+        /// <param name="sources">The existing object.</param>
         /// <param name="sourceType">The source type.</param>
         /// <returns>An exisiting object or null.</returns>
-        private object GetSource(object source, Type sourceType)
+        private object GetSource(IList<object> sources, Type sourceType)
         {
-            if (source.GetType() == sourceType)
+            for (var i = sources.Count - 1; i >= 0; --i)
             {
-                return source;
+                if (sources[i].GetType() == sourceType)
+                {
+                    return sources[i];
+                }
             }
 
             return null;
@@ -403,15 +405,14 @@ namespace OrmMock
         /// Sets properties for the given input object, with the specified type.
         /// </summary>
         /// <param name="inputObject">The input object.</param>
-        /// <param name="sourceObject">The source object.</param>
+        /// <param name="sourceObjects">The source object.</param>
         /// <param name="inputType">The type of the input object.</param>
         /// <param name="inputSingleton">Determines if the input object is a singleton.</param>
-        /// <param name="level">The recursion level.</param>
-        private void SetProperties(object inputObject, object sourceObject, Type inputType, bool inputSingleton, int level)
+        private void SetProperties(object inputObject, IList<object> sourceObjects, Type inputType, bool inputSingleton)
         {
             if (!this.methodPropertyCache.TryGetValue(inputType, out var methods))
             {
-                methods = new List<Action<object, object, int, bool>>();
+                methods = new List<Action<object, IList<object>, bool>>();
 
                 var referenceProperties = new List<PropertyInfo>();
                 var propertyPlacement = new Dictionary<PropertyInfo, int>();
@@ -431,7 +432,7 @@ namespace OrmMock
                     {
                         propertyPlacement.Add(property, methods.Count);
                         var setterDelegate = inputType.DelegateForSetPropertyValue(property.Name);
-                        methods.Add((currentObject, _, __, currentSingleton) =>
+                        methods.Add((currentObject, _, currentSingleton) =>
                         {
                             if (!currentSingleton)
                             {
@@ -447,7 +448,7 @@ namespace OrmMock
                     {
                         propertyPlacement.Add(property, methods.Count);
                         var setterDelegate = inputType.DelegateForSetPropertyValue(property.Name);
-                        methods.Add((currentObject, _, __, currentSingleton) =>
+                        methods.Add((currentObject, _, currentSingleton) =>
                         {
                             if (!currentSingleton)
                             {
@@ -487,7 +488,7 @@ namespace OrmMock
                                 var collectionSetter = inputType.DelegateForSetPropertyValue(property.Name);
                                 var collectionGetter = inputType.DelegateForGetPropertyValue(property.Name);
 
-                                methods.Add((currentObject, currentSource, currentLevel, currentSingleton) =>
+                                methods.Add((currentObject, currentSources, currentSingleton) =>
                                 {
                                     var collection = collectionGetter(currentObject);
                                     var adder = hashSetAdder;
@@ -506,7 +507,7 @@ namespace OrmMock
                                         }
                                     }
 
-                                    var source = noAncestry ? null : GetSource(currentSource, elementType);
+                                    var source = noAncestry ? null : GetSource(currentSources, elementType);
 
                                     if (source != null)
                                     {
@@ -521,13 +522,17 @@ namespace OrmMock
 
                                         if (!this.structure.Include.TryGetValue(property, out int elementCount))
                                         {
-                                            elementCount = currentLevel == 0 ? this.RootCollectionMembers : this.NonRootCollectionMembers;
+                                            elementCount = currentSources.Count == 0 ? this.RootCollectionMembers : this.NonRootCollectionMembers;
                                         }
+
+                                        currentSources.Add(currentObject);
 
                                         for (var i = 0; i < elementCount; ++i)
                                         {
-                                            adder(collection, CreateObject(elementType, currentObject, currentLevel + 1));
+                                            adder(collection, CreateObject(elementType, currentSources));
                                         }
+
+                                        currentSources.RemoveAt(currentSources.Count - 1);
                                     }
                                 });
                             }
@@ -565,14 +570,23 @@ namespace OrmMock
 
                             var foreignKeyNullableGetDelegate = foreignKeyProps.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(fkp => inputType.DelegateForGetPropertyValue(fkp.Name)).FirstOrDefault();
 
-                            methods.Add((currentObject, currentSource, currentLevel, currentSingleton) =>
+                            methods.Add((currentObject, currentSources, currentSingleton) =>
                             {
                                 // Handle nullable
                                 object foreignObject = null;
 
                                 if (foreignKeyNullableGetDelegate == null || foreignKeyNullableGetDelegate.Invoke(currentObject) != null)
                                 {
-                                    foreignObject = (noAncestry ? null : GetSource(currentSource, propertyType)) ?? this.CreateObject(propertyType, currentObject, currentLevel + 1);
+                                    foreignObject = (noAncestry ? null : GetSource(currentSources, propertyType));
+
+                                    if (foreignObject == null)
+                                    {
+                                        currentSources.Add(currentObject);
+
+                                        foreignObject = this.CreateObject(propertyType, currentSources);
+
+                                        currentSources.RemoveAt(currentSources.Count - 1);
+                                    }
                                 }
 
                                 if (currentSingleton)
@@ -631,7 +645,7 @@ namespace OrmMock
 
             foreach (var method in methods)
             {
-                method(inputObject, sourceObject, level, inputSingleton);
+                method(inputObject, sourceObjects, inputSingleton);
             }
         }
 
