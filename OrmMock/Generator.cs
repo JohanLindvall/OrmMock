@@ -49,7 +49,7 @@ namespace OrmMock
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(e))
             {
-                this.structure.WithoutProperty.Add(property);
+                this.structure.PropertyCustomization[property] = CreationOptions.Skip;
             }
 
             return this;
@@ -62,7 +62,7 @@ namespace OrmMock
         /// <returns>The generator.</returns>
         public Generator Without<T>()
         {
-            this.structure.WithoutType.Add(typeof(T));
+            this.structure.TypeCustomization[typeof(T)] = CreationOptions.Skip;
 
             return this;
         }
@@ -77,7 +77,23 @@ namespace OrmMock
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(e))
             {
-                this.structure.WithoutAncestryForProperty.Add(property);
+                this.structure.PropertyCustomization[property] = CreationOptions.IgnoreInheritance;
+            }
+
+            return this;
+        }
+
+        /// <summary>
+        /// Only uses ancestry when setting a specific property.
+        /// </summary>
+        /// <typeparam name="T">The type of the object where the property resides.</typeparam>
+        /// <param name="e">The expression func for the object.</param>
+        /// <returns>The generator.</returns>
+        public Generator OnlyAncestry<T>(Expression<Func<T, object>> e)
+        {
+            foreach (var property in ExpressionUtility.GetPropertyInfo(e))
+            {
+                this.structure.PropertyCustomization[property] = CreationOptions.OnlyInheritance;
             }
 
             return this;
@@ -90,19 +106,43 @@ namespace OrmMock
         /// <returns>The generator.</returns>
         public Generator WithoutAncestryForConstructor<T>()
         {
-            this.structure.WithoutAncestryForConstructor.Add(typeof(T));
+            this.structure.ConstructorCustomization[typeof(T)] = CreationOptions.IgnoreInheritance;
 
             return this;
         }
 
         /// <summary>
-        /// Excludes ancestry from being used when setting properties on the type.
+        /// Only uses ancestry when getting constructor parameters for a type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object to construct.</typeparam>
+        /// <returns>The generator.</returns>
+        public Generator OnlyAncestryForConstructor<T>()
+        {
+            this.structure.ConstructorCustomization[typeof(T)] = CreationOptions.OnlyInheritance;
+
+            return this;
+        }
+
+        /// <summary>
+        /// Excludes ancestry when creating an object of the type.
         /// </summary>
         /// <typeparam name="T">The type of the object for which to ignore ancestry.</typeparam>
         /// <returns>The generator.</returns>
         public Generator WithoutAncestry<T>()
         {
-            this.structure.WithoutAncestryForType.Add(typeof(T));
+            this.structure.TypeCustomization[typeof(T)] = CreationOptions.IgnoreInheritance;
+
+            return this;
+        }
+
+        /// <summary>
+        /// Only uses ancestry when creating an object of the type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object for which to ignore ancestry.</typeparam>
+        /// <returns>The generator.</returns>
+        public Generator OnlyAncestry<T>()
+        {
+            this.structure.TypeCustomization[typeof(T)] = CreationOptions.OnlyInheritance;
 
             return this;
         }
@@ -141,6 +181,7 @@ namespace OrmMock
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(e))
             {
+                this.structure.PropertyCustomization[property] = CreationOptions.IgnoreInheritance;
                 this.structure.CustomPropertySetters.Add(property, _ => value);
             }
 
@@ -159,6 +200,7 @@ namespace OrmMock
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(e))
             {
+                this.structure.PropertyCustomization[property] = CreationOptions.IgnoreInheritance;
                 this.structure.CustomPropertySetters.Add(property, ctx => value(ctx));
             }
 
@@ -173,6 +215,7 @@ namespace OrmMock
         /// <returns>The generator.</returns>
         public Generator With<T>(Func<T> creator)
         {
+            this.structure.TypeCustomization[typeof(T)] = CreationOptions.IgnoreInheritance;
             this.structure.CustomConstructors.Add(typeof(T), (_, __) => creator());
 
             return this;
@@ -186,6 +229,7 @@ namespace OrmMock
         /// <returns>The generator.</returns>
         public Generator With<T>(Func<string, T> creator)
         {
+            this.structure.TypeCustomization[typeof(T)] = CreationOptions.IgnoreInheritance;
             this.structure.CustomConstructors.Add(typeof(T), (_, s) => creator(s));
 
             return this;

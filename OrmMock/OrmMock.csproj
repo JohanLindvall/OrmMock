@@ -50,6 +50,7 @@
     <Compile Include="Generator.cs" />
     <Compile Include="MemDb.cs" />
     <Compile Include="ObjectContext.cs" />
+    <Compile Include="CreationOptions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Relations.cs" />
     <Compile Include="Structure.cs" />

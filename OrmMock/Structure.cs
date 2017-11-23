@@ -30,29 +30,19 @@ namespace OrmMock
     public class Structure
     {
         /// <summary>
-        /// Gets the set of properties to exclude.
+        /// Gets the customized types.
         /// </summary>
-        public HashSet<PropertyInfo> WithoutProperty { get; } = new HashSet<PropertyInfo>();
+        public Dictionary<Type, CreationOptions> TypeCustomization { get; } = new Dictionary<Type, CreationOptions>();
 
         /// <summary>
-        /// Gets the set of types to exclude.
+        /// Gets the customized properties.
         /// </summary>
-        public HashSet<Type> WithoutType { get; } = new HashSet<Type>();
+        public Dictionary<PropertyInfo, CreationOptions> PropertyCustomization { get; } = new Dictionary<PropertyInfo, CreationOptions>();
 
         /// <summary>
-        /// Holds the hashset of properties for which ancestry should be ignored..
+        /// Gets the customized constructor types..
         /// </summary>
-        public HashSet<PropertyInfo> WithoutAncestryForProperty { get; } = new HashSet<PropertyInfo>();
-
-        /// <summary>
-        /// Holds the hashset of types for which ancestry should be ignored.
-        /// </summary>
-        public HashSet<Type> WithoutAncestryForType { get; } = new HashSet<Type>();
-
-        /// <summary>
-        /// Holds the hashset of types for which ancestry should be ignored when create constructor arguments.
-        /// </summary>
-        public HashSet<Type> WithoutAncestryForConstructor { get; } = new HashSet<Type>();
+        public Dictionary<Type, CreationOptions> ConstructorCustomization { get; } = new Dictionary<Type, CreationOptions>();
 
         /// <summary>
         /// Holds the dictionary of navigation properties to include and the count of items to create.

@@ -318,7 +318,16 @@ namespace OrmMock
                     {
                         var constructorParameterType = constructorParameter.ParameterType;
 
-                        if (this.structure.WithoutType.Contains(constructorParameterType))
+                        if (!this.structure.ConstructorCustomization.TryGetValue(constructorParameterType, out var effectiveCreationOptions))
+                        {
+                            if (!this.structure.TypeCustomization.TryGetValue(constructorParameterType, out effectiveCreationOptions))
+                            {
+                                effectiveCreationOptions = CreationOptions.Default;
+                            }
+                        }
+
+
+                        if (effectiveCreationOptions == CreationOptions.Skip)
                         {
                             ctorParameters.Add(_ => null);
                             continue;
@@ -332,12 +341,13 @@ namespace OrmMock
                             continue;
                         }
 
-                        var noAncestry = this.structure.WithoutAncestryForType.Contains(constructorParameterType) || this.structure.WithoutAncestryForConstructor.Contains(constructorParameterType);
+                        var noAncestry = effectiveCreationOptions == CreationOptions.IgnoreInheritance;
+                        var onlyAncestry = effectiveCreationOptions == CreationOptions.OnlyInheritance;
 
                         ctorParameters.Add(localSourceObjects =>
                         {
                             var source = noAncestry ? null : GetSource(localSourceObjects, constructorParameterType, int.MaxValue);
-                            return source ?? CreateObject(constructorParameterType, localSourceObjects);
+                            return source ?? (onlyAncestry ? null : CreateObject(constructorParameterType, localSourceObjects));
                         });
                     }
 
@@ -446,7 +456,15 @@ namespace OrmMock
                     var property = p;
                     var propertyType = property.PropertyType;
 
-                    if (this.structure.WithoutProperty.Contains(property) || this.structure.WithoutType.Contains(propertyType))
+                    if (!this.structure.PropertyCustomization.TryGetValue(property, out var effectiveCreationOptions))
+                    {
+                        if (!this.structure.TypeCustomization.TryGetValue(propertyType, out effectiveCreationOptions))
+                        {
+                            effectiveCreationOptions = CreationOptions.Default;
+                        }
+                    }
+
+                    if (effectiveCreationOptions == CreationOptions.Skip)
                     {
                         // add nothing to methods.
                         continue;
@@ -494,7 +512,16 @@ namespace OrmMock
                     {
                         var property = p;
                         var propertyType = property.PropertyType;
-                        var noAncestry = this.structure.WithoutAncestryForType.Contains(inputType) || this.structure.WithoutAncestryForProperty.Contains(property);
+                        if (!this.structure.PropertyCustomization.TryGetValue(property, out var effectiveCreationOptions))
+                        {
+                            if (!this.structure.TypeCustomization.TryGetValue(propertyType, out effectiveCreationOptions))
+                            {
+                                effectiveCreationOptions = CreationOptions.Default;
+                            }
+                        }
+
+                        var noAncestry = effectiveCreationOptions == CreationOptions.IgnoreInheritance;
+                        var onlyAncestry = effectiveCreationOptions == CreationOptions.OnlyInheritance;
 
                         if (propertyType.IsGenericType)
                         {
@@ -539,7 +566,7 @@ namespace OrmMock
                                     }
                                     else
                                     {
-                                        if (currentSingleton)
+                                        if (currentSingleton || onlyAncestry)
                                         {
                                             return;
                                         }
@@ -603,7 +630,7 @@ namespace OrmMock
                                 {
                                     foreignObject = (noAncestry ? null : GetSource(currentSources, propertyType, int.MaxValue));
 
-                                    if (foreignObject == null)
+                                    if (foreignObject == null && !onlyAncestry)
                                     {
                                         currentSources.Add(currentObject);
 
@@ -789,6 +816,16 @@ namespace OrmMock
             }
 
             return null;
+        }
+
+        private static CreationOptions Join(CreationOptions first, CreationOptions second)
+        {
+            if (first == CreationOptions.Default)
+            {
+                return second;
+            }
+
+            return first;
         }
     }
 }
