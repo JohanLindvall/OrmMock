@@ -59,6 +59,11 @@ namespace OrmMock
         private readonly Dictionary<Type, Func<IList<object>, object>> constructorCache = new Dictionary<Type, Func<IList<object>, object>>();
 
         /// <summary>
+        /// Holds the object logging chain. Only used if logging is enabled.
+        /// </summary>
+        private readonly IList<IList<object>> loggingChain = new List<IList<object>>();
+
+        /// <summary>
         /// Holds the structure data.
         /// </summary>
         private readonly Structure structure;
@@ -285,6 +290,11 @@ namespace OrmMock
         /// <returns></returns>
         private object CreateObject(Type objectType, IList<object> sourceObjects)
         {
+            if (this.Logging && sourceObjects.Count == 0)
+            {
+                this.loggingChain.Clear();
+            }
+
             if (!this.constructorCache.TryGetValue(objectType, out var constructor))
             {
                 var simpleCreator = this.ValueCreator(objectType);
@@ -368,10 +378,7 @@ namespace OrmMock
 
                         if (this.Logging)
                         {
-                            var pkstr = string.Join(", ", this.structure.Relations.GetPrimaryKeys(objectType).Select(k => k.GetMethod.Invoke(result, new object[0]).ToString()));
-
-                            var diag = $"{new string(' ', 4 * localSources.Count)}{objectType} {pkstr}";
-                            Console.WriteLine(diag);
+                            this.loggingChain.Add(localSources.Concat(new[] { result }).ToList());
                         }
 
                         return result;
@@ -381,7 +388,21 @@ namespace OrmMock
                 this.constructorCache.Add(objectType, constructor);
             }
 
-            return constructor(sourceObjects);
+            var newObject = constructor(sourceObjects);
+
+            if (this.Logging && sourceObjects.Count == 0)
+            {
+                foreach (var chain in this.loggingChain.Reverse())
+                {
+                    var obj = chain.Last();
+                    var pkstr = string.Join(", ", this.structure.Relations.GetPrimaryKeys(obj.GetType()).Select(k => k.GetMethod.Invoke(obj, new object[0]).ToString()));
+
+                    var diag = $"{new string(' ', 4 * (chain.Count - 1))}{obj.GetType().Name} {pkstr}";
+                    Console.WriteLine(diag);
+                }
+            }
+
+            return newObject;
         }
 
         /// <summary>
@@ -743,7 +764,7 @@ namespace OrmMock
             }
             else if (t == typeof(decimal))
             {
-                return _ => (decimal)(this.random.NextDouble() - 0.5) * 1e2m; // TODO look into overflows?
+                return _ => Math.Round(100 * (decimal)(this.random.NextDouble() - 0.5) * 1e2m) / 100; // TODO look into overflows?
             }
             else if (t == typeof(bool))
             {
