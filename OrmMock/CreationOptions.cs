@@ -43,6 +43,11 @@ namespace OrmMock
         /// <summary>
         /// Only inheritance is used when setting the object.
         /// </summary>
-        OnlyInheritance
+        OnlyInheritance,
+
+        /// <summary>
+        /// Only direct inheritance is used when setting the object.
+        /// </summary>
+        OnlyDirectInheritance
     }
 }

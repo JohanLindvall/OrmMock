@@ -100,6 +100,22 @@ namespace OrmMock
         }
 
         /// <summary>
+        /// Only uses direct ancestry when setting a specific property.
+        /// </summary>
+        /// <typeparam name="T">The type of the object where the property resides.</typeparam>
+        /// <param name="e">The expression func for the object.</param>
+        /// <returns>The generator.</returns>
+        public Generator OnlyDirectAncestry<T>(Expression<Func<T, object>> e)
+        {
+            foreach (var property in ExpressionUtility.GetPropertyInfo(e))
+            {
+                this.structure.PropertyCustomization[property] = CreationOptions.OnlyDirectInheritance;
+            }
+
+            return this;
+        }
+
+        /// <summary>
         /// Excludes ancestry from being used when creating constructor parameters for a type.
         /// </summary>
         /// <typeparam name="T">The type of the object to construct.</typeparam>
@@ -124,6 +140,18 @@ namespace OrmMock
         }
 
         /// <summary>
+        /// Only uses direct ancestry when getting constructor parameters for a type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object to construct.</typeparam>
+        /// <returns>The generator.</returns>
+        public Generator OnlyDirectAncestryForConstructor<T>()
+        {
+            this.structure.ConstructorCustomization[typeof(T)] = CreationOptions.OnlyDirectInheritance;
+
+            return this;
+        }
+
+        /// <summary>
         /// Excludes ancestry when creating an object of the type.
         /// </summary>
         /// <typeparam name="T">The type of the object for which to ignore ancestry.</typeparam>
@@ -143,6 +171,18 @@ namespace OrmMock
         public Generator OnlyAncestry<T>()
         {
             this.structure.TypeCustomization[typeof(T)] = CreationOptions.OnlyInheritance;
+
+            return this;
+        }
+
+        /// <summary>
+        /// Only uses direct ancestry when creating an object of the type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object for which to ignore ancestry.</typeparam>
+        /// <returns>The generator.</returns>
+        public Generator OnlyDirectAncestry<T>()
+        {
+            this.structure.TypeCustomization[typeof(T)] = CreationOptions.OnlyDirectInheritance;
 
             return this;
         }

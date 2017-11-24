@@ -342,11 +342,12 @@ namespace OrmMock
                         }
 
                         var noAncestry = effectiveCreationOptions == CreationOptions.IgnoreInheritance;
-                        var onlyAncestry = effectiveCreationOptions == CreationOptions.OnlyInheritance;
+                        var onlyDirectAncestry = effectiveCreationOptions == CreationOptions.OnlyDirectInheritance;
+                        var onlyAncestry = onlyDirectAncestry || effectiveCreationOptions == CreationOptions.OnlyInheritance;
 
                         ctorParameters.Add(localSourceObjects =>
                         {
-                            var source = noAncestry ? null : GetSource(localSourceObjects, constructorParameterType, int.MaxValue);
+                            var source = noAncestry ? null : GetSource(localSourceObjects, constructorParameterType, onlyDirectAncestry ? 1 : int.MaxValue);
                             return source ?? (onlyAncestry ? null : CreateObject(constructorParameterType, localSourceObjects));
                         });
                     }
@@ -521,7 +522,8 @@ namespace OrmMock
                         }
 
                         var noAncestry = effectiveCreationOptions == CreationOptions.IgnoreInheritance;
-                        var onlyAncestry = effectiveCreationOptions == CreationOptions.OnlyInheritance;
+                        var onlyDirectAncestry = effectiveCreationOptions == CreationOptions.OnlyDirectInheritance;
+                        var onlyAncestry = onlyDirectAncestry || effectiveCreationOptions == CreationOptions.OnlyInheritance;
 
                         if (propertyType.IsGenericType)
                         {
@@ -628,7 +630,7 @@ namespace OrmMock
 
                                 if (foreignKeyNullableGetDelegate == null || foreignKeyNullableGetDelegate.Invoke(currentObject) != null)
                                 {
-                                    foreignObject = (noAncestry ? null : GetSource(currentSources, propertyType, int.MaxValue));
+                                    foreignObject = noAncestry ? null : GetSource(currentSources, propertyType, onlyDirectAncestry ? 1 : int.MaxValue);
 
                                     if (foreignObject == null && !onlyAncestry)
                                     {
