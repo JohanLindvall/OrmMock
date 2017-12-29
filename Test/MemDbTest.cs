@@ -65,6 +65,11 @@ namespace Test
             public TestClass4 Ref2 { get; set; }
         }
 
+        public class TestClass5
+        {
+            public long Id { get; set; }
+        }
+
         [Test]
         public void TestAdd()
         {
@@ -81,7 +86,7 @@ namespace Test
             var obj = new TestClass1 { Id = Guid.NewGuid() };
             db.Add(obj);
             obj = new TestClass1 { Id = obj.Id };
-            Assert.Throws<InvalidOperationException>(() => db.Add(obj));
+            Assert.Throws<ArgumentException>(() => db.Add(obj));
             Assert.AreEqual(1, db.Count<TestClass1>());
         }
 
@@ -254,11 +259,7 @@ namespace Test
                 Id = 2
             });
 
-            db.Add(stored);
-
-            Assert.IsNotNull(db.Get<TestClass4>(1));
-            Assert.IsNotNull(db.Get<TestClass3>(2));
-            Assert.AreEqual(2, db.Count());
+            Assert.Throws<ArgumentException>(() => db.Add(stored));
         }
 
         [Test]
