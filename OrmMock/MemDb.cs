@@ -21,6 +21,8 @@
 
 namespace OrmMock
 {
+    using Fasterflect;
+
     using System;
     using System.Collections;
     using System.Collections.Generic;
@@ -37,7 +39,17 @@ namespace OrmMock
         /// <summary>
         /// Holds the dictionary of types to objects.
         /// </summary>
-        private readonly Dictionary<Type, List<object>> heldObjects = new Dictionary<Type, List<object>>();
+        private readonly Dictionary<Type, Dictionary<object[], object>> heldObjects = new Dictionary<Type, Dictionary<object[], object>>();
+
+        /// <summary>
+        /// Holds the dictionary of cached key getters.
+        /// </summary>
+        private readonly Dictionary<Type, MemberGetter[]> keyGetters = new Dictionary<Type, MemberGetter[]>();
+
+        /// <summary>
+        /// Holds the dictionary of cached object reference handlers.
+        /// </summary>
+        private readonly Dictionary<Type, Action<object, HashSet<object>>> referenceHandlers = new Dictionary<Type, Action<object, HashSet<object>>>();
 
         /// <summary>
         /// Holds the object relations.
@@ -89,12 +101,9 @@ namespace OrmMock
         public T Get<T>(params object[] keys)
             where T : class
         {
-            var t = typeof(T);
-            var kp = this.GetKeyProperties(t);
-            var i = this.IndexOf(t, kp, keys);
-            if (i != -1)
+            if (this.heldObjects.TryGetValue(typeof(T), out var objects) && objects.TryGetValue(keys, out var result))
             {
-                return (T)this.heldObjects[t][i];
+                return (T)result;
             }
 
             return default(T);
@@ -110,10 +119,10 @@ namespace OrmMock
         {
             if (!this.heldObjects.TryGetValue(typeof(T), out var objs))
             {
-                objs = new List<object>();
+                return new T[0].AsQueryable();
             }
 
-            return objs.Select(o => (T)o).AsQueryable();
+            return objs.Select(o => (T)o.Value).AsQueryable();
         }
 
         /// <summary>
@@ -126,15 +135,65 @@ namespace OrmMock
             where T : class
         {
             var t = typeof(T);
-            var kp = this.GetKeyProperties(t);
-            var ks = kp.Select(p => p.GetMethod.Invoke(obj, new object[0])).ToArray();
-            var i = this.IndexOf(t, kp, ks);
-            if (i != -1)
+
+            if (this.heldObjects.TryGetValue(t, out var objects))
             {
-                this.heldObjects[t].RemoveAt(i);
+                return objects.Remove(this.GetKeys(t, obj));
             }
 
-            return i != -1;
+            return false;
+        }
+
+        private MemberGetter[] GetKeyGetters(Type t)
+        {
+            if (!this.keyGetters.TryGetValue(t, out var result))
+            {
+                result = this.GetKeyProperties(t).Select(p => p.DelegateForGetPropertyValue()).ToArray();
+
+                this.keyGetters.Add(t, result);
+            }
+
+            return result;
+        }
+
+        private object[] GetKeys(Type t, object input)
+        {
+            var getters = this.GetKeyGetters(t);
+            var result = new object[getters.Length];
+            for (var i = 0; i < getters.Length; ++i)
+            {
+                result[i] = getters[i](input);
+            }
+
+            return result;
+        }
+
+        private class ObjectArrayComparer : IEqualityComparer<object[]>
+        {
+            public bool Equals(object[] x, object[] y)
+            {
+                for (var i = 0; i < x.Length; ++i)
+                {
+                    if (!x[i].Equals(y[i])) return false;
+                }
+
+                return true;
+            }
+
+            public int GetHashCode(object[] obj)
+            {
+                unchecked
+                {
+                    int hash = 17;
+
+                    foreach (var singleObj in obj)
+                    {
+                        hash = hash * 31 + singleObj.GetHashCode();
+                    }
+
+                    return hash;
+                }
+            }
         }
 
         private void Add(Type t, object obj, HashSet<object> visited)
@@ -149,91 +208,74 @@ namespace OrmMock
                 return;
             }
 
-            var keyProperties = this.GetKeyProperties(t);
-            var keyValues = keyProperties.Select(p => p.GetMethod.Invoke(obj, new object[0])).ToArray();
-            if (this.IndexOf(t, keyProperties, keyValues) != -1)
-            {
-                if (visited == null)
-                {
-                    throw new InvalidOperationException($@"An object of type '{t.Name}' and the keys '{string.Join(", ", keyValues.Select(k => k.ToString()))}' already exists.");
-                }
-
-                return;
-            }
-
             if (!this.heldObjects.TryGetValue(t, out var objs))
             {
-                objs = new List<object>();
+                objs = new Dictionary<object[], object>(new ObjectArrayComparer());
                 this.heldObjects.Add(t, objs);
             }
 
-            objs.Add(obj);
+            var keyValues = this.GetKeys(t, obj);
+            objs.Add(keyValues, obj);
 
-            if (visited == null)
+            var handler = this.GetReferenceHandler(t);
+
+            if (handler != null)
             {
-                visited = new HashSet<object>(new ObjectEqualityComparer());
+                if (visited == null)
+                {
+                    visited = new HashSet<object>(new ObjectEqualityComparer());
+                }
             }
 
-            visited.Add(obj);
+            visited?.Add(obj);
 
-            foreach (var prop in t.GetProperties().Where(p => p.PropertyType.IsClass || p.PropertyType.IsInterface))
-            {
-                var dest = prop.GetMethod.Invoke(obj, new object[0]);
-
-                if (dest == null)
-                {
-                    continue;
-                }
-
-                var pt = prop.PropertyType;
-
-                if (pt.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICollection<>)))
-                {
-                    var elementType = pt.GetGenericArguments()[0];
-
-                    foreach (var collObj in dest as IEnumerable)
-                    {
-                        this.Add(elementType, collObj, visited);
-                    }
-                }
-                else
-                {
-                    this.Add(pt, dest, visited);
-                }
-            }
+            handler?.Invoke(obj, visited);
         }
 
-        private int IndexOf(Type t, PropertyInfo[] kp, object[] keys)
+        private Action<object, HashSet<object>> GetReferenceHandler(Type t)
         {
-            if (this.heldObjects.TryGetValue(t, out var objs))
+            if (!this.referenceHandlers.TryGetValue(t, out var result))
             {
-                for (var idx = 0; idx < objs.Count; ++idx)
+                var props = t.GetProperties().Where(p => p.PropertyType.IsClass || p.PropertyType.IsInterface).ToArray();
+                var propGetters = props.Select(prop => prop.DelegateForGetPropertyValue()).ToArray();
+                var propertyTypes = props.Select(prop => prop.PropertyType).ToArray();
+                var elementTypes = props.Select(prop => prop.PropertyType.GetInterfaces().Any(xf => xf.IsGenericType && xf.GetGenericTypeDefinition() == typeof(ICollection<>)) ? prop.PropertyType.GetGenericArguments()[0] : null).ToArray();
+
+                if (props.Length != 0)
                 {
-                    var obj = objs[idx];
-                    var okeys = kp.Select(p => p.GetMethod.Invoke(obj, new object[0])).ToArray();
-
-                    if (keys.Length == okeys.Length)
+                    result = (obj, visited) =>
                     {
-                        var miss = false;
-
-                        for (var i = 0; i < keys.Length; ++i)
+                        for (var i = 0; i < props.Length; ++i)
                         {
-                            if (!object.Equals(keys[i], okeys[i]))
+                            var dest = propGetters[i](obj);
+
+                            if (dest == null)
                             {
-                                miss = true;
-                                break;
+                                continue;
+                            }
+
+                            var pt = propertyTypes[i];
+                            var elementType = elementTypes[i];
+
+                            if (elementType != null)
+                            {
+                                foreach (var collObj in dest as IEnumerable)
+                                {
+                                    this.Add(elementType, collObj, visited);
+                                }
+                            }
+                            else
+                            {
+                                this.Add(pt, dest, visited);
                             }
                         }
-
-                        if (!miss)
-                        {
-                            return idx;
-                        }
-                    }
+                    };
                 }
+
+                this.referenceHandlers.Add(t, result);
             }
 
-            return -1;
+            return result;
         }
 
         private PropertyInfo[] GetKeyProperties(Type t) => this.relations.GetPrimaryKeys(t);
