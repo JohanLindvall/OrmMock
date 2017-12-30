@@ -328,5 +328,39 @@ namespace Test
             Assert.IsNotNull(db.Get<TestClass4>(1));
             Assert.AreEqual(1, db.Count());
         }
+
+        [Test]
+        public void TestClone()
+        {
+            var db = new MemDb();
+            var stored = new TestClass4
+            {
+                Id = 1,
+                Ref = new TestClass3
+                {
+                    Id = 2,
+                    Ref2 = new TestClass4
+                    {
+                        Id = 3
+                    }
+                },
+                List = { new TestClass3 { Id = 4 } }
+            };
+
+            db.Add(stored);
+
+            var clone = db.Clone();
+
+            stored.Id = 10;
+            stored.Ref.Id = 11;
+            stored.Ref.Ref2.Id = 12;
+            stored.List[0].Id = 13;
+
+            Assert.IsNotNull(clone.Get<TestClass4>(1));
+            Assert.IsNotNull(clone.Get<TestClass3>(2));
+            Assert.IsNotNull(clone.Get<TestClass4>(3));
+            Assert.IsNotNull(clone.Get<TestClass3>(4));
+            Assert.AreEqual(4, clone.Count());
+        }
     }
 }

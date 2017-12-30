@@ -39,7 +39,7 @@ namespace OrmMock
         /// <summary>
         /// Holds the dictionary of types to objects.
         /// </summary>
-        private readonly Dictionary<Type, Dictionary<object[], object>> heldObjects = new Dictionary<Type, Dictionary<object[], object>>();
+        private Dictionary<Type, Dictionary<object[], object>> heldObjects = new Dictionary<Type, Dictionary<object[], object>>();
 
         /// <summary>
         /// Holds the dictionary of cached key getters.
@@ -142,6 +142,104 @@ namespace OrmMock
             }
 
             return false;
+        }
+
+        public MemDb Clone()
+        {
+            var result = new MemDb();
+            result.heldObjects = this.CloneHeldObjects();
+            return result;
+        }
+
+        private Dictionary<Type, Dictionary<object[], object>> CloneHeldObjects()
+        {
+            var result = new Dictionary<Type, Dictionary<object[], object>>();
+
+            var clones = new Dictionary<object, object>(new ObjectEqualityComparer());
+
+            // First pass create instances and handle value properties.
+            foreach (var kvp in this.heldObjects)
+            {
+                var type = kvp.Key;
+                var objects = kvp.Value.Values;
+                var normalProperties = type.GetProperties().Where(p => p.PropertyType.IsValueType || p.PropertyType == typeof(string) || p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == typeof(Nullable<>)).ToArray();
+                var normalGetters = normalProperties.Select(p => p.DelegateForGetPropertyValue()).ToArray();
+                var normalSetters = normalProperties.Select(p => p.DelegateForSetPropertyValue()).ToArray();
+                var ctor = type.DelegateForCreateInstance();
+
+                if (!result.TryGetValue(type, out var resultForType))
+                {
+                    resultForType = new Dictionary<object[], object>(new ObjectArrayComparer());
+                    result.Add(type, resultForType);
+                }
+
+                foreach (var obj in objects)
+                {
+                    var newObj = ctor();
+                    clones.Add(obj, newObj);
+
+                    for (var i = 0; i < normalGetters.Length; ++i)
+                    {
+                        normalSetters[i](newObj, normalGetters[i](obj));
+                    }
+
+                    resultForType.Add(this.GetKeys(type, newObj), newObj);
+                }
+            }
+
+            // Second pass hookup references to other objects and collections.
+            foreach (var kvp in this.heldObjects)
+            {
+                var type = kvp.Key;
+                var objects = kvp.Value.Values;
+                var referenceProperties = type.GetProperties().Where(p => p.PropertyType.IsClass && p.PropertyType != typeof(string) && !p.PropertyType.IsGenericType).ToArray();
+                var referenceGetters = referenceProperties.Select(p => p.DelegateForGetPropertyValue()).ToArray();
+                var referenceSetters = referenceProperties.Select(p => p.DelegateForSetPropertyValue()).ToArray();
+
+                var collectionProperties = type.GetProperties().Where(p => p.PropertyType.IsGenericType && typeof(ICollection<>).MakeGenericType(p.PropertyType.GenericTypeArguments[0]).IsAssignableFrom(p.PropertyType)).ToArray();
+                var collectionTypes = collectionProperties.Select(p => new { ElementType = p.PropertyType.GenericTypeArguments[0], CollectionType = p.PropertyType.IsInterface ? typeof(List<>).MakeGenericType(p.PropertyType.GenericTypeArguments[0]) : p.PropertyType }).ToArray();
+                var collectionGetters = collectionProperties.Select(p => p.DelegateForGetPropertyValue()).ToArray();
+                var collectionSetters = collectionProperties.Select(p => p.CanWrite ? p.DelegateForSetPropertyValue() : null).ToArray();
+                var collectionAdders = collectionTypes.Select(t => t.CollectionType.DelegateForCallMethod(nameof(ICollection<int>.Add), t.ElementType)).ToArray();
+                var collectionCreators = collectionTypes.Select(t => t.CollectionType.DelegateForCreateInstance()).ToArray();
+
+                foreach (var obj in objects)
+                {
+                    var newObj = clones[obj];
+
+                    for (var i = 0; i < referenceGetters.Length; ++i)
+                    {
+                        var original = referenceGetters[i](obj);
+                        if (original != null)
+                        {
+                            referenceSetters[i](newObj, clones[original]);
+                        }
+                    }
+
+                    for (var i = 0; i < collectionGetters.Length; ++i)
+                    {
+                        var coll = collectionGetters[i](obj);
+
+                        if (coll != null)
+                        {
+                            var newColl = collectionGetters[i](newObj);
+
+                            if (newColl == null)
+                            {
+                                newColl = collectionCreators[i]();
+                                collectionSetters[i](newObj, newColl);
+                            }
+
+                            foreach (var elem in (IEnumerable)coll)
+                            {
+                                collectionAdders[i](newColl, clones[elem]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            return result;
         }
 
         private MemberGetter[] GetKeyGetters(Type t)
