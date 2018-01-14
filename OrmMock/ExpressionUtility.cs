@@ -1,4 +1,4 @@
-﻿// Copyright(c) 2017 Johan Lindvall
+﻿// Copyright(c) 2017, 2018 Johan Lindvall
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -40,15 +40,13 @@ namespace OrmMock
         public static PropertyInfo[] GetPropertyInfo<T, T2>(Expression<Func<T, T2>> expression)
         {
             var body = expression.Body;
-            var ue = body as UnaryExpression;
-            if (ue != null && ue.NodeType == ExpressionType.Convert)
+            if (body is UnaryExpression ue && ue.NodeType == ExpressionType.Convert)
             {
                 body = ue.Operand;
             }
 
-            NewExpression ne;
             MemberExpression me;
-            if ((ne = body as NewExpression) != null)
+            if (body is NewExpression ne)
             {
                 var mes = ne.Arguments.Select(a => a as MemberExpression).ToArray();
 

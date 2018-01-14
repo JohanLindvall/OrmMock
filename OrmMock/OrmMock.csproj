@@ -46,6 +46,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Comparers\ObjectArrayComparer.cs" />
+    <Compile Include="Comparers\ObjectEqualityComparer.cs" />
     <Compile Include="CreationOptions.cs" />
     <Compile Include="ExpressionUtility.cs" />
     <Compile Include="Generator.cs" />

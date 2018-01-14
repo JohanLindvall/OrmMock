@@ -1,4 +1,4 @@
-﻿// Copyright(c) 2017 Johan Lindvall
+﻿// Copyright(c) 2017, 2018 Johan Lindvall
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal

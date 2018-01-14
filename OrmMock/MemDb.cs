@@ -1,4 +1,4 @@
-﻿// Copyright(c) 2017 Johan Lindvall
+﻿// Copyright(c) 2017, 2018 Johan Lindvall
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,10 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 namespace OrmMock
 {
     using Fasterflect;
+    using Comparers;
 
     using System;
     using System.Collections;
@@ -29,7 +29,6 @@ namespace OrmMock
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
-    using System.Runtime.CompilerServices;
 
     /// <summary>
     /// Defines a class for a simple in-memory DB using LINQ as the query language.
@@ -50,6 +49,11 @@ namespace OrmMock
         /// Holds the dictionary of cached object reference handlers.
         /// </summary>
         private readonly Dictionary<Type, Action<object, HashSet<object>>> referenceHandlers = new Dictionary<Type, Action<object, HashSet<object>>>();
+
+        /// <summary>
+        /// Holds the dioctionary of auto incrementers.
+        /// </summary>
+        private readonly Dictionary<Type, Tuple<IList<PropertyInfo>, IList<long>>> autoIncrement = new Dictionary<Type, Tuple<IList<PropertyInfo>, IList<long>>>();
 
         /// <summary>
         /// Holds the object relations.
@@ -80,6 +84,28 @@ namespace OrmMock
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <param name="expression">The expression defining the primary keys.</param>
         public void RegisterKey<T>(Expression<Func<T, object>> expression) where T : class => this.relations.RegisterPrimaryKeys(expression);
+
+        public void RegisterAutoIncrement<T>(Expression<Func<T, object>> expression) where T : class
+        {
+            foreach (var prop in ExpressionUtility.GetPropertyInfo(expression))
+            {
+                if (new[] { typeof(long), typeof(int), typeof(short) }.Any(t => prop.PropertyType == t))
+                {
+                    if (!this.autoIncrement.TryGetValue(typeof(T), out var typeValue))
+                    {
+                        typeValue = new Tuple<IList<PropertyInfo>, IList<long>>(new List<PropertyInfo>(), new List<long>());
+                        this.autoIncrement.Add(typeof(T), typeValue);
+                    }
+
+                    typeValue.Item1.Add(prop);
+                    typeValue.Item2.Add(0);
+                }
+                else
+                {
+                    throw new InvalidOperationException($@"Unsupported type '{prop.PropertyType.Name}'");
+                }
+            }
+        }
 
         /// <summary>
         /// Adds an object to the DB.
@@ -146,9 +172,8 @@ namespace OrmMock
 
         public MemDb Clone()
         {
-            var result = new MemDb();
-            result.heldObjects = this.CloneHeldObjects();
-            return result;
+            // TODO copy relations and autoIncrement.
+            return new MemDb { heldObjects = this.CloneHeldObjects() };
         }
 
         private Dictionary<Type, Dictionary<object[], object>> CloneHeldObjects()
@@ -266,34 +291,6 @@ namespace OrmMock
             return result;
         }
 
-        private class ObjectArrayComparer : IEqualityComparer<object[]>
-        {
-            public bool Equals(object[] x, object[] y)
-            {
-                for (var i = 0; i < x.Length; ++i)
-                {
-                    if (!x[i].Equals(y[i])) return false;
-                }
-
-                return true;
-            }
-
-            public int GetHashCode(object[] obj)
-            {
-                unchecked
-                {
-                    int hash = 17;
-
-                    foreach (var singleObj in obj)
-                    {
-                        hash = hash * 31 + singleObj.GetHashCode();
-                    }
-
-                    return hash;
-                }
-            }
-        }
-
         private void Add(Type t, object obj, HashSet<object> visited)
         {
             if (this.IncludeFilter != null && !this.IncludeFilter(t) || t == typeof(string) || t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>))
@@ -334,12 +331,27 @@ namespace OrmMock
         {
             if (!this.referenceHandlers.TryGetValue(t, out var result))
             {
+                var allProps = t.GetProperties().ToArray();
+
+                Action<object>[] autoIncrementers = null;
+                if (this.autoIncrement.TryGetValue(t, out var autoIncrementForType))
+                {
+                    var autoIncrementMap = autoIncrementForType.Item1.Select(ai => allProps.Select((p, i) => new { p, i }).Single(i => i.p == ai).i).ToArray();
+                    var autoIncrementSetter = autoIncrementMap.Select(i => new Tuple<MemberSetter, Type>(allProps[i].DelegateForSetPropertyValue(), allProps[i].PropertyType)).ToArray();
+
+                    autoIncrementers = autoIncrementSetter.Select<Tuple<MemberSetter, Type>, Action<object>>((item, idx) => (object obj) =>
+                    {
+                        var value = ++autoIncrementForType.Item2[idx];
+                        item.Item1(obj, Convert.ChangeType(value, item.Item2));
+                    }).ToArray();
+                }
+
                 var props = t.GetProperties().Where(p => p.PropertyType.IsClass || p.PropertyType.IsInterface).ToArray();
                 var propGetters = props.Select(prop => prop.DelegateForGetPropertyValue()).ToArray();
                 var propertyTypes = props.Select(prop => prop.PropertyType).ToArray();
-                var elementTypes = props.Select(prop => prop.PropertyType.GetInterfaces().Any(xf => xf.IsGenericType && xf.GetGenericTypeDefinition() == typeof(ICollection<>)) ? prop.PropertyType.GetGenericArguments()[0] : null).ToArray();
+                var elementTypes = propertyTypes.Select(pt => pt.GetInterfaces().Any(xf => xf.IsGenericType && xf.GetGenericTypeDefinition() == typeof(ICollection<>)) ? pt.GetGenericArguments()[0] : null).ToArray();
 
-                if (props.Length != 0)
+                if (props.Length != 0 || autoIncrementers != null && autoIncrementers.Length != 0)
                 {
                     result = (obj, visited) =>
                     {
@@ -367,6 +379,14 @@ namespace OrmMock
                                 this.Add(pt, dest, visited);
                             }
                         }
+
+                        if (autoIncrementers != null)
+                        {
+                            foreach (var item in autoIncrementers)
+                            {
+                                item(obj);
+                            }
+                        }
                     };
                 }
 
@@ -377,18 +397,5 @@ namespace OrmMock
         }
 
         private PropertyInfo[] GetKeyProperties(Type t) => this.relations.GetPrimaryKeys(t);
-
-        private class ObjectEqualityComparer : IEqualityComparer<object>
-        {
-            bool IEqualityComparer<object>.Equals(object x, object y)
-            {
-                return object.ReferenceEquals(x, y);
-            }
-
-            int IEqualityComparer<object>.GetHashCode(object obj)
-            {
-                return RuntimeHelpers.GetHashCode(obj);
-            }
-        }
     }
 }

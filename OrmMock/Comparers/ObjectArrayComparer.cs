@@ -18,36 +18,35 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-namespace OrmMock
+namespace OrmMock.Comparers
 {
-    /// <summary>
-    /// Defines an enum controlling how properties are set / created.
-    /// </summary>
-    public enum CreationOptions
+    using System.Collections.Generic;
+
+    internal class ObjectArrayComparer : IEqualityComparer<object[]>
     {
-        /// <summary>
-        /// The default options
-        /// </summary>
-        Default,
+        public bool Equals(object[] x, object[] y)
+        {
+            for (var i = 0; i < x.Length; ++i)
+            {
+                if (!x[i].Equals(y[i])) return false;
+            }
 
-        /// <summary>
-        /// The object is skipped altogether.
-        /// </summary>
-        Skip,
+            return true;
+        }
 
-        /// <summary>
-        /// Inheritance is ignored when creating / setting the object.
-        /// </summary>
-        IgnoreInheritance,
+        public int GetHashCode(object[] obj)
+        {
+            unchecked
+            {
+                int hash = 17;
 
-        /// <summary>
-        /// Only inheritance is used when setting the object.
-        /// </summary>
-        OnlyInheritance,
+                foreach (var singleObj in obj)
+                {
+                    hash = hash * 31 + singleObj.GetHashCode();
+                }
 
-        /// <summary>
-        /// Only direct inheritance is used when setting the object.
-        /// </summary>
-        OnlyDirectInheritance
+                return hash;
+            }
+        }
     }
 }

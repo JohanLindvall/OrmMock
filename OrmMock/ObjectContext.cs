@@ -326,7 +326,6 @@ namespace OrmMock
                             }
                         }
 
-
                         if (effectiveCreationOptions == CreationOptions.Skip)
                         {
                             ctorParameters.Add(_ => null);

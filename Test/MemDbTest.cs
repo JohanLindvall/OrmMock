@@ -68,6 +68,8 @@ namespace Test
         public class TestClass5
         {
             public long Id { get; set; }
+
+            public int Auto { get; set; }
         }
 
         [Test]
@@ -361,6 +363,27 @@ namespace Test
             Assert.IsNotNull(clone.Get<TestClass4>(3));
             Assert.IsNotNull(clone.Get<TestClass3>(4));
             Assert.AreEqual(4, clone.Count());
+        }
+
+        [Test]
+        public void TestAutoIncrement()
+        {
+            var db = new MemDb();
+            db.RegisterAutoIncrement<TestClass5>(i => i.Auto);
+            db.Add(new TestClass5
+            {
+                Id = 123
+            });
+            db.Add(new TestClass5
+            {
+                Id = 1234
+            });
+
+            var s1 = db.Get<TestClass5>((long)123);
+            var s2 = db.Get<TestClass5>((long)1234);
+
+            Assert.AreEqual(1, s1.Auto);
+            Assert.AreEqual(2, s2.Auto);
         }
     }
 }
