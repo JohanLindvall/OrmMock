@@ -55,7 +55,7 @@
     <Compile Include="ForPropertyContext.cs" />
     <Compile Include="ForTypeContext.cs" />
     <Compile Include="IBuildContext.cs" />
-    <Compile Include="IForPropertyContext.cs" />
+    <Compile Include="ICreationsOptions.cs" />
     <Compile Include="MemDb.cs" />
     <Compile Include="ObjectContext.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
