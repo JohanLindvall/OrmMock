@@ -20,34 +20,30 @@
 
 namespace OrmMock
 {
-    /// <summary>
-    /// Defines an enum controlling how properties are set / created.
-    /// </summary>
-    public enum CreationOptions
+    public interface ICreationsOptions<T>
     {
         /// <summary>
-        /// The default options. Look one level up for a parent to use. If not found, a new object is created.
+        /// Excludes a value from being set. The default value will be used.
         /// </summary>
-        Default,
+        /// <returns>The type context.</returns>
+        ForTypeContext<T> Skip();
 
         /// <summary>
-        /// The object is skipped altogether.
+        /// Parents are ignored for this value.
         /// </summary>
-        Skip,
+        /// <returns>The type context.</returns>
+        ForTypeContext<T> IgnoreParents();
 
         /// <summary>
-        /// Inheritance is ignored when creating / setting the object.
+        /// Only direct parents are used for this value. A new object is not created.
         /// </summary>
-        IgnoreInheritance,
+        /// <returns>The type context.</returns>
+        ForTypeContext<T> OnlyDirectParent();
 
         /// <summary>
-        /// Only inheritance is used when setting the object.
+        /// Only parents are used for this value. A new object is not created.
         /// </summary>
-        OnlyInheritance,
-
-        /// <summary>
-        /// Only direct inheritance is used when setting the object.
-        /// </summary>
-        OnlyDirectInheritance
+        /// <returns>The type context.</returns>
+        ForTypeContext<T> OnlyParents();
     }
 }

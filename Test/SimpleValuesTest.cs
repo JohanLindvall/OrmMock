@@ -12,7 +12,7 @@ namespace Test
         [SetUp]
         public void Setup()
         {
-            this.generator = new Generator().CreateContext();
+            this.generator = new ObjectContext();
         }
 
         public T GetValue<T>()

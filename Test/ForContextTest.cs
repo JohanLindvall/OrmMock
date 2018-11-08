@@ -7,17 +7,26 @@ using OrmMock;
 namespace Test
 {
     [TestFixture]
-    public class GeneratorTest
+    public class ForContextTest
     {
-        private Generator generator;
-
         private ObjectContext ctx;
 
         [SetUp]
         public void Setup()
         {
-            this.generator = new Generator();
-            this.ctx = this.generator.CreateContext();
+            this.ctx = new ObjectContext();
+        }
+
+        public class ClassWithConstructor
+        {
+            private int id;
+
+            public int Id => this.id;
+
+            public ClassWithConstructor(int id)
+            {
+                this.id = id;
+            }
         }
 
         public class TestClass1
@@ -42,9 +51,14 @@ namespace Test
 
         public class TestClass3
         {
+            public TestClass1 TestClass1 { get; }
+
+            public Guid Id { get; }
+
             public TestClass3(TestClass1 tc1, Guid id)
             {
-
+                this.TestClass1 = tc1;
+                this.Id = id;
             }
         }
 
@@ -76,7 +90,6 @@ namespace Test
             public TestClass7 Class7 { get; set; }
 
             public TestClass8 Class8 { get; set; }
-
         }
 
         public class TestClass7
@@ -88,7 +101,6 @@ namespace Test
             public TestClass8 Class8 { get; set; }
 
             public ICollection<TestClass6> Class6 { get; set; }
-
         }
 
         public class TestClass8
@@ -98,7 +110,6 @@ namespace Test
 
             public ICollection<TestClass6> Class6 { get; set; }
         }
-
 
         public class TestClass9
         {
@@ -218,7 +229,8 @@ namespace Test
         [Test]
         public void TestSingleton()
         {
-            this.generator.Singleton<TestClass2>();
+            this.ctx.For<TestClass2>()
+                .RegisterSingleton();
 
             var result = this.ctx.CreateMany<TestClass1>(10).ToList();
 
@@ -234,7 +246,7 @@ namespace Test
             {
                 Id = 123
             };
-            this.ctx.Singleton(singleton);
+            this.ctx.For<TestClass2>().Use(singleton);
 
             var result = this.ctx.CreateMany<TestClass1>(10).ToList();
 
@@ -244,7 +256,10 @@ namespace Test
         [Test]
         public void TestSingletonReferenceMismatch()
         {
-            this.generator.Include<TestClass2>(tc => tc.Class1, 1);
+            this.ctx.For<TestClass2>()
+                .For(tc => tc.Class1)
+                .Include(1);
+
             var obj1 = this.ctx.Create<TestClass2>();
             this.ctx.Singleton(this.ctx.GetObject<TestClass1>());
             Assert.Throws<InvalidOperationException>(() => this.ctx.Create<TestClass2>());
@@ -267,7 +282,9 @@ namespace Test
         [Test]
         public void TestCustomSetter()
         {
-            this.generator.With<string>(() => "str");
+            this.ctx.For<string>()
+                .Use(() => "str");
+
             var obj = this.ctx.Create<SimpleClass>();
             Assert.AreEqual("str", obj.Prop1);
             Assert.AreEqual("str", obj.Prop2);
@@ -276,9 +293,15 @@ namespace Test
         [Test]
         public void TestCustomProperty()
         {
-            this.generator.With<string>(() => "str");
-            this.generator.With<SimpleClass, string>(sc => sc.Prop1, _ => "str1");
-            this.generator.With<SimpleClass, string>(sc => sc.Prop2, _ => "str2");
+            this.ctx.For<string>()
+                .Use(() => "str");
+
+            this.ctx.For<SimpleClass>()
+                .For(sc => sc.Prop1)
+                .Use(_ => "str1")
+                .For(sc => sc.Prop2)
+                .Use(_ => "str2");
+
             var obj = this.ctx.Create<SimpleClass>();
             Assert.AreEqual("str1", obj.Prop1);
             Assert.AreEqual("str2", obj.Prop2);
@@ -287,7 +310,9 @@ namespace Test
         [Test]
         public void TestWithoutType()
         {
-            this.generator.Without<string>();
+            this.ctx.For<string>()
+                .Skip();
+
             var obj = this.ctx.Create<SimpleClass>();
             Assert.IsNull(obj.Prop1);
             Assert.IsNull(obj.Prop2);
@@ -296,7 +321,10 @@ namespace Test
         [Test]
         public void TestWithoutProperty()
         {
-            this.generator.Without<SimpleClass>(sc => sc.Prop2);
+            this.ctx.For<SimpleClass>()
+                .For(sc => sc.Prop2)
+                .Skip();
+
             var obj = this.ctx.Create<SimpleClass>();
             Assert.IsNotEmpty(obj.Prop1);
             Assert.IsNull(obj.Prop2);
@@ -306,13 +334,18 @@ namespace Test
         public void TestConstructor()
         {
             var result = this.ctx.Create<TestClass3>();
-            Assert.IsNotNull(result);
+
+            Assert.IsNotNull(result.TestClass1);
+            Assert.AreNotEqual(Guid.Empty, result.Id);
         }
 
         [Test]
         public void TestInclude()
         {
-            this.generator.Include<TestClass2>(tc => tc.Class1, 2);
+            this.ctx.For<TestClass2>()
+                .For(tc => tc.Class1)
+                .Include(2);
+
             var obj = this.ctx.Create<TestClass2>();
             Assert.AreEqual(2, obj.Class1.Count);
         }
@@ -320,12 +353,15 @@ namespace Test
         [Test]
         public void Test11Relation()
         {
-            this.generator.Relations.Register11Relation<TestClass9, TestClass10>(tc => tc.Id, tc => tc.Id);
+            this.ctx.For<TestClass9>()
+                .For(tc => tc.Id)
+                .Has11Relation<TestClass10>(tc => tc.Id);
 
             var obj = this.ctx.Create<TestClass9>();
             Assert.AreEqual(2, this.ctx.GetObjects().Count());
             Assert.AreNotEqual(Guid.Empty, obj.Id);
             Assert.AreNotEqual(Guid.Empty, obj.Class10.Id);
+            Assert.AreEqual(obj.Id, obj.Class10.Id);
         }
 
         [Test]
@@ -346,6 +382,29 @@ namespace Test
                 var s = this.ctx.CreateString("xx", i);
                 Assert.AreEqual(i, s.Length);
             }
+        }
+
+        [Test]
+        public void TestSkipConstructorParameter()
+        {
+            this.ctx.For<int>()
+                .ForConstructor()
+                .Skip();
+
+            var obj = this.ctx.Create<ClassWithConstructor>();
+
+            Assert.AreEqual(default(int), obj.Id);
+        }
+
+        [Test]
+        public void TestBuildContext()
+        {
+            var item = this.ctx.Build<SimpleClass>()
+                .With(x => x.Prop1, "foo")
+                .Create();
+
+            Assert.AreEqual("foo", item.Prop1);
+            Assert.AreNotEqual("foo", item.Prop2);
         }
     }
 }

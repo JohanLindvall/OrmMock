@@ -23,7 +23,6 @@ namespace OrmMock
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using System.Linq.Expressions;
     using System.Reflection;
 
     using Fasterflect;
@@ -98,9 +97,9 @@ namespace OrmMock
         /// </summary>
         public bool Logging { get; set; }
 
-        public ObjectContext(Structure structure)
+        public ObjectContext()
         {
-            this.structure = structure;
+            this.structure = new Structure();
         }
 
         /// <summary>
@@ -123,6 +122,26 @@ namespace OrmMock
             this.singletons.Add(typeof(T), value);
 
             return this;
+        }
+
+        /// <summary>
+        /// Gets the for context for the given type.
+        /// </summary>
+        /// <typeparam name="T">The type of the for context.</typeparam>
+        /// <returns>A typed for context.</returns>
+        public ForTypeContext<T> For<T>()
+        {
+            return new ForTypeContext<T>(this, this.structure, this.structure.Relations);
+        }
+
+        /// <summary>
+        /// Gets the build context for a given type.
+        /// </summary>
+        /// <typeparam name="T">The type of the build context.</typeparam>
+        /// <returns>A typed build context.</returns>
+        public IBuildContext<T> Build<T>()
+        {
+            return new BuildContext<T>(this);
         }
 
         /// <summary>
@@ -206,26 +225,6 @@ namespace OrmMock
         }
 
         /// <summary>
-        /// Creates an object of the given type.
-        /// </summary>
-        /// <typeparam name="T">The type of the object.</typeparam>
-        /// <typeparam name="T2">The type of the parameter.</typeparam>
-        /// <param name="e">The setter expression</param>
-        /// <param name="value">The value</param>
-        /// <returns>The created object.</returns>
-        public T Create<T, T2>(Expression<Func<T, T2>> e, T2 value)
-        {
-            var result = this.Create<T>();
-
-            foreach (var property in ExpressionUtility.GetPropertyInfo(e))
-            {
-                property.SetMethod.Invoke(result, new[] { (object)value });
-            }
-
-            return result;
-        }
-
-        /// <summary>
         /// Creates many objects of the given type.
         /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
@@ -235,22 +234,6 @@ namespace OrmMock
             while (create-- > 0)
             {
                 yield return this.Create<T>();
-            }
-        }
-
-        /// <summary>
-        /// Creates many objects of the given type.
-        /// </summary>
-        /// <typeparam name="T">The type of the object.</typeparam>
-        /// <typeparam name="T2">The type of the parameter.</typeparam>
-        /// <param name="e">The setter expression</param>
-        /// <param name="values">The values</param>
-        /// <returns>The created objects.</returns>
-        public IEnumerable<T> CreateMany<T, T2>(Expression<Func<T, T2>> e, params T2[] values)
-        {
-            foreach (var value in values)
-            {
-                yield return this.Create(e, value);
             }
         }
 
@@ -337,7 +320,12 @@ namespace OrmMock
 
                         if (effectiveCreationOptions == CreationOptions.Skip)
                         {
-                            ctorParameters.Add(_ => null);
+                            object defaultValue = null;
+                            if (constructorParameterType.IsValueType)
+                            {
+                                defaultValue = Activator.CreateInstance(constructorParameterType);
+                            }
+                            ctorParameters.Add(_ => defaultValue);
                             continue;
                         }
 
@@ -460,7 +448,7 @@ namespace OrmMock
                 var referenceProperties = new List<PropertyInfo>();
                 var propertyPlacement = new Dictionary<PropertyInfo, int>();
 
-                foreach (var p in inputType.GetProperties())
+                foreach (var p in inputType.GetProperties().Where(p => p.SetMethod != null))
                 {
                     var property = p;
                     var propertyType = property.PropertyType;
@@ -568,7 +556,7 @@ namespace OrmMock
                                         }
                                     }
 
-                                    var source = noAncestry ? null : GetSource(currentSources, elementType, 1);
+                                    var source = noAncestry ? null : GetSource(currentSources, elementType, 1); // note that only one level of inheritance is considered here
 
                                     if (source != null)
                                     {

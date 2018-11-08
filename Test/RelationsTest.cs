@@ -58,7 +58,7 @@ namespace Test
         public void TestGetForeignKeys()
         {
             this.relations.RegisterPrimaryKeys<TestClass2>(tc => new { tc.Id1, tc.Id2 });
-            this.relations.RegisterForeignKeys<TestClass3, TestClass2>(tc => new { tc.TestClass2Id1, tc.TestClass2Id2 });
+            this.relations.RegisterForeignKeys<TestClass3, TestClass2, object>(tc => new { tc.TestClass2Id1, tc.TestClass2Id2 });
 
             var fk1 = this.relations.GetForeignKeys(typeof(TestClass3), typeof(TestClass1));
             var fk2 = this.relations.GetForeignKeys(typeof(TestClass3), typeof(TestClass2));
@@ -71,7 +71,7 @@ namespace Test
         [Test]
         public void TestGetForeignKeysMismatch()
         {
-            Assert.Throws<InvalidOperationException>(() => this.relations.RegisterForeignKeys<TestClass3, TestClass1>(tc => tc.TestClass2Id2));
+            Assert.Throws<InvalidOperationException>(() => this.relations.RegisterForeignKeys<TestClass3, TestClass1, object>(tc => tc.TestClass2Id2));
         }
 
         [Test]

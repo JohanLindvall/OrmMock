@@ -85,13 +85,21 @@ namespace OrmMock
         /// </summary>
         /// <typeparam name="TThis">The type of the object.</typeparam>
         /// <typeparam name="TForeign">The type of the foreign object.</typeparam>
+        /// <typeparam name="TKey">The type of the key property.</typeparam>
         /// <param name="expression">The expression defining the foreign keys.</param>
-        public Relations RegisterForeignKeys<TThis, TForeign>(Expression<Func<TThis, object>> expression)
-            where TThis : class
-            where TForeign : class
+        public Relations RegisterForeignKeys<TThis, TForeign, TKey>(Expression<Func<TThis, TKey>> expression)
         {
-            var keys = ExpressionUtility.GetPropertyInfo(expression);
+            return this.RegisterForeignKeyProperties<TThis, TForeign>(ExpressionUtility.GetPropertyInfo(expression));
+        }
 
+        /// <summary>
+        /// Registers an expression defining the foreign keys of an object.
+        /// </summary>
+        /// <typeparam name="TThis">The type of the object.</typeparam>
+        /// <typeparam name="TForeign">The type of the foreign object.</typeparam>
+        /// <param name="keys">The foreign keys.</param>
+        public Relations RegisterForeignKeyProperties<TThis, TForeign>(PropertyInfo[] keys)
+        {
             this.ValidateForeignKeys(typeof(TThis), typeof(TForeign), keys);
 
             this.foreignKeys.Add(new Tuple<Type, Type>(typeof(TThis), typeof(TForeign)), keys);
@@ -107,11 +115,9 @@ namespace OrmMock
         /// <param name="expression1">The expression defining the foreign keys of the first object.</param>
         /// <param name="expression2">The expression defining the foreign keys of the second object.</param>
         public Relations Register11Relation<TThis, TForeign>(Expression<Func<TThis, object>> expression1, Expression<Func<TForeign, object>> expression2)
-            where TThis : class
-            where TForeign : class
         {
-            this.RegisterForeignKeys<TThis, TForeign>(expression1);
-            this.RegisterForeignKeys<TForeign, TThis>(expression2);
+            this.RegisterForeignKeys<TThis, TForeign, object>(expression1);
+            this.RegisterForeignKeys<TForeign, TThis, object>(expression2);
 
             return this;
         }
@@ -166,7 +172,7 @@ namespace OrmMock
         }
 
         /// <summary>
-        /// Validates that the type of the foreign keys match the primary keys of the foregin object.
+        /// Validates that the type of the foreign keys match the primary keys of the foreign object.
         /// </summary>
         /// <param name="tThis">The type of the object.</param>
         /// <param name="tForeign">The type of the foreign object.</param>
