@@ -9,7 +9,7 @@
     <projectUrl>https://github.com/JohanLindvall/OrmMock</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>ORM Mock data generator and in-memory database.</description>
-    <copyright>Copyright 2017</copyright>
+    <copyright>Copyright 2017, 2018</copyright>
     <tags>ORM Mock data</tags>
     <dependencies>
       <dependency id="fasterflect" version="2.1.3" />

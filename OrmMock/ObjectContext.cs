@@ -1,4 +1,4 @@
-﻿// Copyright(c) 2017 Johan Lindvall
+﻿// Copyright(c) 2017, 2018 Johan Lindvall
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -41,7 +41,7 @@ namespace OrmMock
         /// <summary>
         /// Holds the list of created objects.
         /// </summary>
-        private readonly IList<object> createdObjects = new List<object>();
+        private readonly List<object> createdObjects = new List<object>();
 
         /// <summary>
         /// Holds the created singletons.
@@ -94,13 +94,22 @@ namespace OrmMock
         public int NonRootCollectionMembers { get; set; } = 0;
 
         /// <summary>
-        /// Gets or sets value determining if logging of object creation should be enabled.
+        /// Gets or sets a value determining if logging of object creation should be enabled.
         /// </summary>
         public bool Logging { get; set; }
 
         public ObjectContext(Structure structure)
         {
             this.structure = structure;
+        }
+
+        /// <summary>
+        /// Resets the internally stored created objects.
+        /// </summary>
+        public void Reset()
+        {
+            this.createdObjects.Clear();
+            this.objectCount = 0;
         }
 
         /// <summary>
@@ -144,14 +153,14 @@ namespace OrmMock
         /// <returns>The object at the given index.</returns>
         public T GetObject<T>(int index)
         {
-            return (T)this.createdObjects.Where(o => o.GetType() == typeof(T)).Skip(index).First();
+            return this.GetObjects<T>().Skip(index).First();
         }
 
         /// <summary>
         /// Gets the object of the specified type.
         /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
-        /// <returns>The objectsx.</returns>
+        /// <returns>The objects.</returns>
         public IEnumerable<T> GetObjects<T>()
         {
             return this.createdObjects.Where(o => o.GetType() == typeof(T)).Select(o => (T)o);
@@ -421,7 +430,7 @@ namespace OrmMock
         /// <param name="sources">The existing object.</param>
         /// <param name="sourceType">The source type.</param>
         /// <param name="maxLevel">The maximum level.</param>
-        /// <returns>An exisiting object or null.</returns>
+        /// <returns>An existing object or null.</returns>
         private object GetSource(IList<object> sources, Type sourceType, int maxLevel)
         {
             for (var i = sources.Count - 1; i >= 0 && maxLevel > 0; --i, --maxLevel)
@@ -817,16 +826,6 @@ namespace OrmMock
             }
 
             return null;
-        }
-
-        private static CreationOptions Join(CreationOptions first, CreationOptions second)
-        {
-            if (first == CreationOptions.Default)
-            {
-                return second;
-            }
-
-            return first;
         }
     }
 }

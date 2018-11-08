@@ -51,7 +51,7 @@ namespace OrmMock
         private readonly Dictionary<Type, Action<object, HashSet<object>>> referenceHandlers = new Dictionary<Type, Action<object, HashSet<object>>>();
 
         /// <summary>
-        /// Holds the dioctionary of auto incrementers.
+        /// Holds the dictionary of auto incrementers.
         /// </summary>
         private readonly Dictionary<Type, Tuple<IList<PropertyInfo>, IList<long>>> autoIncrement = new Dictionary<Type, Tuple<IList<PropertyInfo>, IList<long>>>();
 
@@ -339,7 +339,7 @@ namespace OrmMock
                     var autoIncrementMap = autoIncrementForType.Item1.Select(ai => allProps.Select((p, i) => new { p, i }).Single(i => i.p == ai).i).ToArray();
                     var autoIncrementSetter = autoIncrementMap.Select(i => new Tuple<MemberSetter, Type>(allProps[i].DelegateForSetPropertyValue(), allProps[i].PropertyType)).ToArray();
 
-                    autoIncrementers = autoIncrementSetter.Select<Tuple<MemberSetter, Type>, Action<object>>((item, idx) => (object obj) =>
+                    autoIncrementers = autoIncrementSetter.Select<Tuple<MemberSetter, Type>, Action<object>>((item, idx) => obj =>
                     {
                         var value = ++autoIncrementForType.Item2[idx];
                         item.Item1(obj, Convert.ChangeType(value, item.Item2));
