@@ -1,23 +1,46 @@
-﻿using System;
-using NUnit.Framework;
-using OrmMock;
+﻿
+using System;
 
 namespace Test
 {
+    using NUnit.Framework;
+    using OrmMock;
+
     [TestFixture]
-    public class SimpleValuesTest
+    class ValueCreatorTest
     {
-        private ObjectContext generator;
+        private ValueCreator valueCreator;
 
         [SetUp]
         public void Setup()
         {
-            this.generator = new ObjectContext();
+            this.valueCreator = new ValueCreator();
         }
+
+        [Test]
+        public void TestCreateString()
+        {
+            for (int i = 0; i < 30; ++i)
+            {
+                var s = this.valueCreator.CreateString(i);
+                Assert.AreEqual(i, s.Length);
+            }
+        }
+
+        [Test]
+        public void TestCreateStringPrefix()
+        {
+            for (int i = 0; i < 30; ++i)
+            {
+                var s = this.valueCreator.CreateString("xx", i);
+                Assert.AreEqual(i, s.Length);
+            }
+        }
+
 
         public T GetValue<T>()
         {
-            return this.generator.Create<T>();
+            return (T)this.valueCreator.Get(typeof(T)).Invoke(string.Empty);
         }
 
         [Test]
