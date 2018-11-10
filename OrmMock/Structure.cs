@@ -58,10 +58,5 @@ namespace OrmMock
         /// Holds the dictionary of custom constructors.
         /// </summary>
         public Dictionary<Type, Func<ObjectContext, string, object>> CustomConstructors { get; } = new Dictionary<Type, Func<ObjectContext, string, object>>();
-
-        /// <summary>
-        /// Holds the relations
-        /// </summary>
-        public Relations Relations { get; } = new Relations();
     }
 }

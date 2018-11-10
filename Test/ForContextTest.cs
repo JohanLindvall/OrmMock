@@ -365,8 +365,7 @@ namespace Test
         [Test]
         public void Test11Relation()
         {
-            this.ctx.For<TestClass9>()
-                .Has11Relation<TestClass10, Guid>(tc9 => tc9.Id, tc10 => tc10.Id);
+            this.ctx.Relations.Register11Relation<TestClass9, TestClass10>(tc9 => tc9.Id, tc10 => tc10.Id);
 
             var obj = this.ctx.Create<TestClass9>();
             Assert.AreEqual(2, this.ctx.GetObjects().Count());

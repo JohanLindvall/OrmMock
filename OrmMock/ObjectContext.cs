@@ -95,9 +95,12 @@ namespace OrmMock
         /// </summary>
         public bool Logging { get; set; }
 
+        public Relations Relations { get; }
+
         public ObjectContext()
         {
             this.structure = new Structure();
+            this.Relations = new Relations();
         }
 
         /// <summary>
@@ -129,7 +132,7 @@ namespace OrmMock
         /// <returns>A typed for context.</returns>
         public ForTypeContext<T> For<T>()
         {
-            return new ForTypeContext<T>(this, this.structure, this.structure.Relations);
+            return new ForTypeContext<T>(this, this.structure);
         }
 
         /// <summary>
@@ -312,7 +315,7 @@ namespace OrmMock
                 foreach (var chain in this.loggingChain.Reverse())
                 {
                     var obj = chain.Last();
-                    var pkstr = string.Join(", ", this.structure.Relations.GetPrimaryKeys(obj.GetType()).Select(k => k.GetMethod.Invoke(obj, new object[0]).ToString()));
+                    var pkstr = string.Join(", ", this.Relations.GetPrimaryKeys(obj.GetType()).Select(k => k.GetMethod.Invoke(obj, new object[0]).ToString()));
 
                     var diag = $"{new string(' ', 4 * (chain.Count - 1))}{obj.GetType().Name} {pkstr}";
                     Console.WriteLine(diag);
@@ -495,8 +498,8 @@ namespace OrmMock
                         {
                             // Going from t to pt
                             // Note that primary keys and foreign keys may be equal.
-                            var foreignKeyProps = this.structure.Relations.GetForeignKeys(inputType, propertyType);
-                            var primaryKeyProps = this.structure.Relations.GetPrimaryKeys(inputType);
+                            var foreignKeyProps = this.Relations.GetForeignKeys(inputType, propertyType);
+                            var primaryKeyProps = this.Relations.GetPrimaryKeys(inputType);
 
                             var pkFkEqual = foreignKeyProps.SequenceEqual(primaryKeyProps);
 
