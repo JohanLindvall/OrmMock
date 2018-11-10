@@ -277,8 +277,7 @@ namespace Test
         public void TestSingletonReferenceMismatch()
         {
             this.ctx.For<TestClass2>()
-                .For(tc => tc.Class1)
-                .Include(1);
+                .Include(tc => tc.Class1, 1);
 
             var obj1 = this.ctx.Create<TestClass2>();
             this.ctx.Singleton(this.ctx.GetObject<TestClass1>());
@@ -317,10 +316,8 @@ namespace Test
                 .Use(() => "str");
 
             this.ctx.For<SimpleClass>()
-                .For(sc => sc.Prop1)
-                .Use(_ => "str1")
-                .For(sc => sc.Prop2)
-                .Use(_ => "str2");
+                .Use(sc => sc.Prop1, _ => "str1")
+                .Use(sc => sc.Prop2, _ => "str2");
 
             var obj = this.ctx.Create<SimpleClass>();
             Assert.AreEqual("str1", obj.Prop1);
@@ -342,8 +339,7 @@ namespace Test
         public void TestWithoutProperty()
         {
             this.ctx.For<SimpleClass>()
-                .For(sc => sc.Prop2)
-                .Skip();
+                .Skip(sc => sc.Prop2);
 
             var obj = this.ctx.Create<SimpleClass>();
             Assert.IsNotEmpty(obj.Prop1);
@@ -360,8 +356,7 @@ namespace Test
         public void TestInclude()
         {
             this.ctx.For<TestClass2>()
-                .For(tc => tc.Class1)
-                .Include(2);
+                .Include(tc => tc.Class1, 2);
 
             var obj = this.ctx.Create<TestClass2>();
             Assert.AreEqual(2, obj.Class1.Count);
@@ -371,8 +366,7 @@ namespace Test
         public void Test11Relation()
         {
             this.ctx.For<TestClass9>()
-                .For(tc => tc.Id)
-                .Has11Relation<TestClass10>(tc => tc.Id);
+                .Has11Relation<TestClass10, Guid>(tc9 => tc9.Id, tc10 => tc10.Id);
 
             var obj = this.ctx.Create<TestClass9>();
             Assert.AreEqual(2, this.ctx.GetObjects().Count());

@@ -21,6 +21,8 @@
 namespace OrmMock
 {
     using System;
+    using System.Collections.Generic;
+    using System.Reflection;
     using System.Linq.Expressions;
 
     /// <summary>
@@ -99,15 +101,90 @@ namespace OrmMock
             return this;
         }
 
-        public ForPropertyContext<T, T2> For<T2>(Expression<Func<T, T2>> e)
+        /// <summary>
+        /// Includes a navigation property to be added to.
+        /// </summary>
+        /// <param name="e">The expression to include.</param>
+        /// <param name="count">The number of items to create. Default is 3.</param>
+        /// <returns>The generator.</returns>
+        public ForTypeContext<T> Include(Expression<Func<T, object>> e, int count = 3)
         {
-            return new ForPropertyContext<T, T2>(this, this.structure, this.relations, ExpressionUtility.GetPropertyInfo(e));
+            return this.ForEach(e, pi =>
+            {
+                if (pi.PropertyType.GetGenericTypeDefinition() != typeof(ICollection<>))
+                {
+                    throw new ArgumentException("Must be ICollection<>");
+                }
+
+                this.structure.Include.Add(pi, count);
+            });
+        }
+
+        /// <summary>
+        /// Sets a property to a specific value.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The generator.</returns>
+        public ForTypeContext<T> Use<T2>(Expression<Func<T, object>> e, T2 value)
+        {
+            return this.ForEach(e, pi =>
+            {
+                this.structure.PropertyCustomization[pi] = CreationOptions.IgnoreInheritance;
+                this.structure.CustomPropertySetters.Add(pi, _ => value);
+            });
+        }
+
+        /// <summary>
+        /// Sets a property to a specific value.
+        /// </summary>
+        /// <param name="value">The value generator.</param>
+        /// <returns>The generator.</returns>
+        public ForTypeContext<T> Use<T2>(Expression<Func<T, object>> e, Func<ObjectContext, T2> value)
+        {
+            return this.ForEach(e, pi =>
+            {
+                this.structure.PropertyCustomization[pi] = CreationOptions.IgnoreInheritance;
+                this.structure.CustomPropertySetters.Add(pi, ctx => value(ctx));
+            });
+        }
+
+        /// <summary>
+        /// Excludes a property from being set. The default value will be used.
+        /// </summary>
+        /// <returns>The type context.</returns>
+        public ForTypeContext<T> Skip(Expression<Func<T, object>> e) => this.SetCreationOptions(e, CreationOptions.Skip);
+
+        /// <summary>
+        /// Parents are ignored for this property.
+        /// </summary>
+        /// <returns>The type context.</returns>
+        public ForTypeContext<T> IgnoreParents(Expression<Func<T, object>> e) => this.SetCreationOptions(e, CreationOptions.IgnoreInheritance);
+
+        /// <summary>
+        /// Only direct parents are used for this parameter. A new object is not created.
+        /// </summary>
+        /// <returns>The type context.</returns>
+        public ForTypeContext<T> OnlyDirectParent(Expression<Func<T, object>> e) => this.SetCreationOptions(e, CreationOptions.OnlyDirectInheritance);
+
+        /// <summary>
+        /// Only parents are used for this parameter. A new object is not created.
+        /// </summary>
+        /// <returns>The type context.</returns>
+        public ForTypeContext<T> OnlyParents(Expression<Func<T, object>> e) => this.SetCreationOptions(e, CreationOptions.OnlyInheritance);
+
+        private ForTypeContext<T> SetCreationOptions(Expression<Func<T, object>> e, CreationOptions options) => this.ForEach(e, pi => this.structure.PropertyCustomization[pi] = options);
+
+        public ForTypeContext<T> Has11Relation<T3, T2>(Expression<Func<T, T2>> e1, Expression<Func<T3, T2>> e2)
+            where T3 : class
+        {
+            this.relations.RegisterForeignKeyProperties<T, T3>(ExpressionUtility.GetPropertyInfo(e1));
+            this.relations.RegisterForeignKeyProperties<T3, T>(ExpressionUtility.GetPropertyInfo(e2));
+            return this;
         }
 
         public ForTypeContext<T> IgnoreParents() => this.SetCreationOptions(CreationOptions.IgnoreInheritance);
 
         public ForTypeContext<T> OnlyDirectParent() => this.SetCreationOptions(CreationOptions.OnlyDirectInheritance);
-
 
         public ForTypeContext<T> OnlyParents() => this.SetCreationOptions(CreationOptions.OnlyInheritance);
 
@@ -116,6 +193,16 @@ namespace OrmMock
         private ForTypeContext<T> SetCreationOptions(CreationOptions options)
         {
             this.structure.TypeCustomization[typeof(T)] = options;
+
+            return this;
+        }
+
+        private ForTypeContext<T> ForEach<T2>(Expression<Func<T, T2>> e, Action<PropertyInfo> pi)
+        {
+            foreach (var property in ExpressionUtility.GetPropertyInfo(e))
+            {
+                pi(property);
+            }
 
             return this;
         }

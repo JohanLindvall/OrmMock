@@ -51,7 +51,6 @@
     <Compile Include="Comparers\ObjectEqualityComparer.cs" />
     <Compile Include="CreationOptions.cs" />
     <Compile Include="ExpressionUtility.cs" />
-    <Compile Include="ForPropertyContext.cs" />
     <Compile Include="ForTypeContext.cs" />
     <Compile Include="IBuildContext.cs" />
     <Compile Include="ICreationsOptions.cs" />
