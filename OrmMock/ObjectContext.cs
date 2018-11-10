@@ -260,58 +260,7 @@ namespace OrmMock
                 }
                 else
                 {
-                    var ctor = objectType.GetConstructors().SingleOrDefault();
-
-                    if (ctor == null)
-                    {
-                        throw new InvalidOperationException($@"Cannot construct {objectType.Name}.");
-                    }
-
-                    var ctorParameters = new List<Func<IList<object>, object>>();
-
-                    foreach (var constructorParameter in ctor.GetParameters())
-                    {
-                        var constructorParameterType = constructorParameter.ParameterType;
-
-                        if (!this.structure.ConstructorCustomization.TryGetValue(constructorParameterType, out var effectiveCreationOptions))
-                        {
-                            if (!this.structure.TypeCustomization.TryGetValue(constructorParameterType, out effectiveCreationOptions))
-                            {
-                                effectiveCreationOptions = CreationOptions.Default;
-                            }
-                        }
-
-                        if (effectiveCreationOptions == CreationOptions.Skip)
-                        {
-                            object defaultValue = null;
-                            if (constructorParameterType.IsValueType)
-                            {
-                                defaultValue = Activator.CreateInstance(constructorParameterType);
-                            }
-                            ctorParameters.Add(_ => defaultValue);
-                            continue;
-                        }
-
-                        var localValueCreator = this.GetValueCreator(constructorParameterType);
-
-                        if (localValueCreator != null)
-                        {
-                            ctorParameters.Add(_ => localValueCreator(objectType.Name));
-                            continue;
-                        }
-
-                        var noAncestry = effectiveCreationOptions == CreationOptions.IgnoreInheritance;
-                        var onlyDirectAncestry = effectiveCreationOptions == CreationOptions.OnlyDirectInheritance;
-                        var onlyAncestry = onlyDirectAncestry || effectiveCreationOptions == CreationOptions.OnlyInheritance;
-
-                        ctorParameters.Add(localSourceObjects =>
-                        {
-                            var source = noAncestry ? null : GetSource(localSourceObjects, constructorParameterType, onlyDirectAncestry ? 1 : int.MaxValue);
-                            return source ?? (onlyAncestry ? null : CreateObject(constructorParameterType, localSourceObjects));
-                        });
-                    }
-
-                    var constructorDelegate = ctor.DelegateForCreateInstance();
+                    var constructorDelegate = Reflection.GetParameterlessConstructor(objectType);
 
                     constructor = localSources =>
                     {
@@ -335,7 +284,7 @@ namespace OrmMock
                             throw new InvalidOperationException($"Attempt to create more than {this.ObjectLimit} objects.");
                         }
 
-                        var result = constructorDelegate(ctorParameters.Select(ca => ca(localSources)).ToArray());
+                        var result = constructorDelegate();
 
                         this.createdObjects.Add(result);
 

@@ -104,11 +104,6 @@ namespace OrmMock
             return new ForPropertyContext<T, T2>(this, this.structure, this.relations, ExpressionUtility.GetPropertyInfo(e));
         }
 
-        public ICreationsOptions<T> ForConstructor()
-        {
-            return new ForConstructorParametersContext<T>(this, this.structure);
-        }
-
         public ForTypeContext<T> IgnoreParents() => this.SetCreationOptions(CreationOptions.IgnoreInheritance);
 
         public ForTypeContext<T> OnlyDirectParent() => this.SetCreationOptions(CreationOptions.OnlyDirectInheritance);

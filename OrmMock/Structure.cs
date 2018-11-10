@@ -40,11 +40,6 @@ namespace OrmMock
         public Dictionary<PropertyInfo, CreationOptions> PropertyCustomization { get; } = new Dictionary<PropertyInfo, CreationOptions>();
 
         /// <summary>
-        /// Gets the customized constructor types..
-        /// </summary>
-        public Dictionary<Type, CreationOptions> ConstructorCustomization { get; } = new Dictionary<Type, CreationOptions>();
-
-        /// <summary>
         /// Holds the dictionary of navigation properties to include and the count of items to create.
         /// </summary>
         public Dictionary<PropertyInfo, int> Include { get; } = new Dictionary<PropertyInfo, int>();

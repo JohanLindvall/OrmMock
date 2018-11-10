@@ -351,12 +351,9 @@ namespace Test
         }
 
         [Test]
-        public void TestConstructor()
+        public void TestConstructorParametersFail()
         {
-            var result = this.ctx.Create<TestClass3>();
-
-            Assert.IsNotNull(result.TestClass1);
-            Assert.AreNotEqual(Guid.Empty, result.Id);
+            Assert.Throws<InvalidOperationException>(() => this.ctx.Create<TestClass3>());
         }
 
         [Test]
@@ -382,18 +379,6 @@ namespace Test
             Assert.AreNotEqual(Guid.Empty, obj.Id);
             Assert.AreNotEqual(Guid.Empty, obj.Class10.Id);
             Assert.AreEqual(obj.Id, obj.Class10.Id);
-        }
-
-        [Test]
-        public void TestSkipConstructorParameter()
-        {
-            this.ctx.For<int>()
-                .ForConstructor()
-                .Skip();
-
-            var obj = this.ctx.Create<ClassWithConstructor>();
-
-            Assert.AreEqual(default(int), obj.Id);
         }
 
         [Test]
