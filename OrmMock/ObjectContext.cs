@@ -25,8 +25,6 @@ namespace OrmMock
     using System.Linq;
     using System.Reflection;
 
-    using Fasterflect;
-
     /// <summary>
     /// Defines an object context containing the created object.
     /// </summary>
@@ -260,7 +258,7 @@ namespace OrmMock
                 }
                 else
                 {
-                    var constructorDelegate = Reflection.GetParameterlessConstructor(objectType);
+                    var constructorDelegate = Reflection.ParameterlessConstructorInvoker(objectType);
 
                     constructor = localSources =>
                     {
@@ -382,7 +380,7 @@ namespace OrmMock
                     if (this.structure.CustomPropertySetters.TryGetValue(property, out var valueFunc))
                     {
                         propertyPlacement.Add(property, methods.Count);
-                        var setterDelegate = inputType.DelegateForSetPropertyValue(property.Name);
+                        var setterDelegate = Reflection.SetPropertyValueInvoker(inputType, property.Name);
                         methods.Add((currentObject, _, currentSingleton) =>
                         {
                             if (!currentSingleton)
@@ -398,7 +396,7 @@ namespace OrmMock
                     if (localValueCreator != null)
                     {
                         propertyPlacement.Add(property, methods.Count);
-                        var setterDelegate = inputType.DelegateForSetPropertyValue(property.Name);
+                        var setterDelegate = Reflection.SetPropertyValueInvoker(inputType, property.Name);
                         methods.Add((currentObject, _, currentSingleton) =>
                         {
                             if (!currentSingleton)
@@ -443,36 +441,27 @@ namespace OrmMock
                                 }
 
                                 var elementType = propertyType.GetGenericArguments()[0];
+                                var interfaceType = typeof(HashSet<>).MakeGenericType(elementType);
                                 var collectionType = typeof(HashSet<>).MakeGenericType(elementType);
-                                var hashSetAdder = collectionType.DelegateForCallMethod(nameof(HashSet<int>.Add), elementType);
-                                var hashSetCreator = collectionType.DelegateForCreateInstance();
-                                var collectionSetter = inputType.DelegateForSetPropertyValue(property.Name);
-                                var collectionGetter = inputType.DelegateForGetPropertyValue(property.Name);
+                                var collectionAdder = Reflection.CallMethodWithOneArgumentInvoker(interfaceType, elementType, nameof(ICollection<int>.Add));
+                                var hashSetCreator = Reflection.ParameterlessConstructorInvoker(collectionType);
+                                var collectionSetter = Reflection.SetPropertyValueInvoker(inputType, property.Name);
+                                var collectionGetter = Reflection.GetPropertyValueInvoker(inputType, property.Name);
 
                                 methods.Add((currentObject, currentSources, currentSingleton) =>
                                 {
                                     var collection = collectionGetter(currentObject);
-                                    var adder = hashSetAdder;
                                     if (collection == null)
                                     {
                                         collection = hashSetCreator();
                                         collectionSetter(currentObject, collection);
-                                    }
-                                    else
-                                    {
-                                        var existingCollectionType = collection.GetType();
-
-                                        if (existingCollectionType != collectionType)
-                                        {
-                                            adder = collection.GetType().DelegateForCallMethod("Add", elementType);
-                                        }
                                     }
 
                                     var source = noAncestry ? null : GetSource(currentSources, elementType, 1); // note that only one level of inheritance is considered here
 
                                     if (source != null)
                                     {
-                                        adder(collection, source);
+                                        collectionAdder(collection, source);
                                     }
                                     else
                                     {
@@ -490,7 +479,7 @@ namespace OrmMock
 
                                         for (var i = 0; i < elementCount; ++i)
                                         {
-                                            adder(collection, CreateObject(elementType, currentSources));
+                                            collectionAdder(collection, CreateObject(elementType, currentSources));
                                         }
 
                                         currentSources.RemoveAt(currentSources.Count - 1);
@@ -524,19 +513,19 @@ namespace OrmMock
                                 continue;
                             }
 
-                            var foreignKeySetDelegates = foreignKeyProps.Select(fkp => inputType.DelegateForSetPropertyValue(fkp.Name)).ToList();
-                            var primaryKeyGetDelegates = primaryKeyProps.Select(pkp => propertyType.DelegateForGetPropertyValue(pkp.Name)).ToList();
-                            var foreignObjectGetter = inputType.DelegateForGetPropertyValue(property.Name);
-                            var foreignObjectSetter = inputType.DelegateForSetPropertyValue(property.Name);
+                            var foreignKeySetDelegates = foreignKeyProps.Select(fkp => Reflection.SetPropertyValueInvoker(inputType, fkp.Name)).ToList();
+                            var primaryKeyGetDelegates = primaryKeyProps.Select(pkp => Reflection.GetPropertyValueInvoker(propertyType, pkp.Name)).ToList();
+                            var foreignObjectGetter = Reflection.GetPropertyValueInvoker(inputType, property.Name);
+                            var foreignObjectSetter = Reflection.SetPropertyValueInvoker(inputType, property.Name);
 
-                            var foreignKeyNullableGetDelegate = foreignKeyProps.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(fkp => inputType.DelegateForGetPropertyValue(fkp.Name)).FirstOrDefault();
+                            var foreignKeyNullableGetDelegate = foreignKeyProps.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(fkp => Reflection.GetPropertyValueInvoker(inputType, fkp.Name)).FirstOrDefault();
 
                             methods.Add((currentObject, currentSources, currentSingleton) =>
                             {
                                 // Handle nullable
                                 object foreignObject = null;
 
-                                if (foreignKeyNullableGetDelegate == null || foreignKeyNullableGetDelegate.Invoke(currentObject) != null)
+                                if (foreignKeyNullableGetDelegate == null || foreignKeyNullableGetDelegate(currentObject) != null)
                                 {
                                     foreignObject = noAncestry ? null : GetSource(currentSources, propertyType, onlyDirectAncestry ? 1 : int.MaxValue);
 

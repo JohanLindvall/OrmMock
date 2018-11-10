@@ -33,7 +33,7 @@ namespace OrmMock
         /// </summary>
         /// <param name="t">The type of the object to create.</param>
         /// <returns>A function creating object of the given type.</returns>
-        public static Func<object> GetParameterlessConstructor(Type t)
+        public static Func<object> ParameterlessConstructorInvoker(Type t)
         {
             var constructor = t.GetConstructor(Type.EmptyTypes);
 
@@ -44,7 +44,28 @@ namespace OrmMock
 
             var constructorDelegate = constructor.DelegateForCreateInstance();
 
-            return () => constructorDelegate.Invoke();
+            return () => constructorDelegate();
+        }
+
+        public static Action<object, object> SetPropertyValueInvoker(Type t, string property)
+        {
+            var setPropertyDelegate = t.DelegateForSetPropertyValue(property);
+
+            return (obj, value) => setPropertyDelegate(obj, value);
+        }
+
+        public static Func<object, object> GetPropertyValueInvoker(Type t, string property)
+        {
+            var getPropertyDelegate = t.DelegateForGetPropertyValue(property);
+
+            return obj => getPropertyDelegate(obj);
+        }
+
+        public static Func<object, object, object> CallMethodWithOneArgumentInvoker(Type t, Type argumentType, string method)
+        {
+            var callMethodDelegate = t.DelegateForCallMethod(method, argumentType);
+
+            return (obj, arg) => callMethodDelegate(obj, arg);
         }
     }
 }
