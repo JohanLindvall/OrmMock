@@ -46,14 +46,9 @@ namespace OrmMock
         private readonly Dictionary<Type, object> singletons = new Dictionary<Type, object>();
 
         /// <summary>
-        /// Holds the method property cache.
+        /// Holds the cache of computed constructors and setters.
         /// </summary>
-        private readonly Dictionary<Type, List<Action<object, IList<object>, bool>>> methodPropertyCache = new Dictionary<Type, List<Action<object, IList<object>, bool>>>();
-
-        /// <summary>
-        /// Holds the constructor cache for the given type.
-        /// </summary>
-        private readonly Dictionary<Type, Func<IList<object>, object>> constructorCache = new Dictionary<Type, Func<IList<object>, object>>();
+        private readonly Cache cache = new Cache();
 
         /// <summary>
         /// Holds the object logging chain. Only used if logging is enabled.
@@ -61,9 +56,9 @@ namespace OrmMock
         private readonly IList<IList<object>> loggingChain = new List<IList<object>>();
 
         /// <summary>
-        /// Holds the structure data.
+        /// Holds the customization data.
         /// </summary>
-        private readonly Structure structure;
+        private readonly Customization customization;
 
         /// <summary>
         /// Holds the value creator used by this instance.
@@ -99,8 +94,14 @@ namespace OrmMock
 
         public ObjectContext()
         {
-            this.structure = new Structure();
+            this.customization = new Customization();
             this.Relations = new Relations();
+        }
+
+        private ObjectContext(Customization customization, Relations relations)
+        {
+            this.customization = customization;
+            this.Relations = relations;
         }
 
         /// <summary>
@@ -132,17 +133,16 @@ namespace OrmMock
         /// <returns>A typed for context.</returns>
         public ForTypeContext<T> For<T>()
         {
-            return new ForTypeContext<T>(this, this.structure);
+            return new ForTypeContext<T>(this, this.customization);
         }
 
         /// <summary>
-        /// Gets the build context for a given type.
+        /// Forks the current object context.
         /// </summary>
-        /// <typeparam name="T">The type of the build context.</typeparam>
         /// <returns>A typed build context.</returns>
-        public IBuildContext<T> Build<T>()
+        public ObjectContext Fork()
         {
-            return new BuildContext<T>(this);
+            return new ObjectContext(new Customization(this.customization), this.Relations);
         }
 
         /// <summary>
@@ -251,7 +251,7 @@ namespace OrmMock
                 this.loggingChain.Clear();
             }
 
-            if (!this.constructorCache.TryGetValue(objectType, out var constructor))
+            if (!this.cache.ConstructorCache.TryGetValue(objectType, out var constructor))
             {
                 var simpleCreator = this.GetValueCreator(objectType);
 
@@ -270,7 +270,7 @@ namespace OrmMock
                             throw new InvalidOperationException($@"Recursion limit of {this.RecursionLimit} exceeded.");
                         }
 
-                        var handleSingleton = this.structure.Singletons.Contains(objectType) || this.singletons.ContainsKey(objectType);
+                        var handleSingleton = this.customization.ShouldBeSingleton(objectType) || this.singletons.ContainsKey(objectType);
 
                         if (handleSingleton && this.singletons.TryGetValue(objectType, out object singleton))
                         {
@@ -305,7 +305,7 @@ namespace OrmMock
                     };
                 }
 
-                this.constructorCache.Add(objectType, constructor);
+                this.cache.ConstructorCache.Add(objectType, constructor);
             }
 
             var newObject = constructor(sourceObjects);
@@ -354,7 +354,7 @@ namespace OrmMock
         /// <param name="inputSingleton">Determines if the input object is a singleton.</param>
         private void SetProperties(object inputObject, IList<object> sourceObjects, Type inputType, bool inputSingleton)
         {
-            if (!this.methodPropertyCache.TryGetValue(inputType, out var methods))
+            if (!this.cache.MethodPropertyCache.TryGetValue(inputType, out var methods))
             {
                 methods = new List<Action<object, IList<object>, bool>>();
 
@@ -366,13 +366,7 @@ namespace OrmMock
                     var property = p;
                     var propertyType = property.PropertyType;
 
-                    if (!this.structure.PropertyCustomization.TryGetValue(property, out var effectiveCreationOptions))
-                    {
-                        if (!this.structure.TypeCustomization.TryGetValue(propertyType, out effectiveCreationOptions))
-                        {
-                            effectiveCreationOptions = CreationOptions.Default;
-                        }
-                    }
+                    var effectiveCreationOptions = this.customization.GetEffectiveCreationsOptions(property);
 
                     if (effectiveCreationOptions == CreationOptions.Skip)
                     {
@@ -380,7 +374,7 @@ namespace OrmMock
                         continue;
                     }
 
-                    if (this.structure.CustomPropertySetters.TryGetValue(property, out var valueFunc))
+                    if (this.customization.TryGetPropertySetter(property, out var valueFunc))
                     {
                         propertyPlacement.Add(property, methods.Count);
                         var setterDelegate = Reflection.SetPropertyValueInvoker(inputType, property.Name);
@@ -422,13 +416,7 @@ namespace OrmMock
                     {
                         var property = p;
                         var propertyType = property.PropertyType;
-                        if (!this.structure.PropertyCustomization.TryGetValue(property, out var effectiveCreationOptions))
-                        {
-                            if (!this.structure.TypeCustomization.TryGetValue(propertyType, out effectiveCreationOptions))
-                            {
-                                effectiveCreationOptions = CreationOptions.Default;
-                            }
-                        }
+                        var effectiveCreationOptions = this.customization.GetEffectiveCreationsOptions(property);
 
                         var noAncestry = effectiveCreationOptions == CreationOptions.IgnoreInheritance;
                         var onlyDirectAncestry = effectiveCreationOptions == CreationOptions.OnlyDirectInheritance;
@@ -473,7 +461,7 @@ namespace OrmMock
                                             return;
                                         }
 
-                                        if (!this.structure.Include.TryGetValue(property, out int elementCount))
+                                        if (!this.customization.TryGetIncludeCount(property, out int elementCount))
                                         {
                                             elementCount = currentSources.Count == 0 ? this.RootCollectionMembers : this.NonRootCollectionMembers;
                                         }
@@ -593,7 +581,7 @@ namespace OrmMock
 
                 methods = methods.Where(method => method != null).ToList();
 
-                this.methodPropertyCache.Add(inputType, methods);
+                this.cache.MethodPropertyCache.Add(inputType, methods);
             }
 
             foreach (var method in methods)
@@ -609,12 +597,28 @@ namespace OrmMock
         /// <returns></returns>
         private Func<string, object> GetValueCreator(Type t)
         {
-            if (this.structure.CustomConstructors.TryGetValue(t, out var creator))
+            if (this.customization.TryGetCustomConstructor(t, out var creator))
             {
                 return s => creator(this, s);
             }
 
             return this.valueCreator.Get(t);
+        }
+
+        /// <summary>
+        /// Holds the cache of constructors and object setters.
+        /// </summary>
+        private class Cache
+        {
+            /// <summary>
+            /// Holds the method property cache.
+            /// </summary>
+            public readonly Dictionary<Type, List<Action<object, IList<object>, bool>>> MethodPropertyCache = new Dictionary<Type, List<Action<object, IList<object>, bool>>>();
+
+            /// <summary>
+            /// Holds the constructor cache for the given type.
+            /// </summary>
+            public readonly Dictionary<Type, Func<IList<object>, object>> ConstructorCache = new Dictionary<Type, Func<IList<object>, object>>();
         }
     }
 }

@@ -46,20 +46,18 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="BuildContext.cs" />
     <Compile Include="Comparers\ObjectArrayComparer.cs" />
     <Compile Include="Comparers\ObjectEqualityComparer.cs" />
     <Compile Include="CreationOptions.cs" />
     <Compile Include="ExpressionUtility.cs" />
     <Compile Include="ForTypeContext`.cs" />
-    <Compile Include="IBuildContext.cs" />
     <Compile Include="ICreationsOptions.cs" />
     <Compile Include="MemDb.cs" />
     <Compile Include="ObjectContext.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Reflection.cs" />
     <Compile Include="Relations.cs" />
-    <Compile Include="Structure.cs" />
+    <Compile Include="Customization.cs" />
     <Compile Include="ValueCreator.cs" />
   </ItemGroup>
   <ItemGroup>

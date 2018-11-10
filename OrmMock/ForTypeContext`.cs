@@ -37,19 +37,19 @@ namespace OrmMock
         private readonly ObjectContext objectContext;
 
         /// <summary>
-        /// Holds the structure.
+        /// Holds the customization data.
         /// </summary>
-        private readonly Structure structure;
+        private readonly Customization customization;
 
         /// <summary>
         /// Initializes a new instance of the ForTypeContext class.
         /// </summary>
         /// <param name="objectContext">The object context.</param>
-        /// <param name="structure">The structure.</param>
-        public ForTypeContext(ObjectContext objectContext, Structure structure)
+        /// <param name="customization">The customization data.</param>
+        public ForTypeContext(ObjectContext objectContext, Customization customization)
         {
             this.objectContext = objectContext;
-            this.structure = structure;
+            this.customization = customization;
         }
 
         /// <summary>
@@ -78,8 +78,8 @@ namespace OrmMock
         /// <returns>The generator.</returns>
         public void Use(Func<string, T> creator)
         {
-            this.structure.TypeCustomization[typeof(T)] = CreationOptions.IgnoreInheritance;
-            this.structure.CustomConstructors.Add(typeof(T), (_, s) => creator(s));
+            this.customization.SetTypeCustomization(typeof(T), CreationOptions.IgnoreInheritance);
+            this.customization.SetCustomConstructor(typeof(T), (_, s) => creator(s));
         }
 
         /// <summary>
@@ -88,7 +88,7 @@ namespace OrmMock
         /// <returns></returns>
         public ForTypeContext<T> RegisterSingleton()
         {
-            this.structure.Singletons.Add(typeof(T));
+            this.customization.RegisterSingleton(typeof(T));
 
             return this;
         }
@@ -134,8 +134,8 @@ namespace OrmMock
         {
             return this.ForEach(e, pi =>
             {
-                this.structure.PropertyCustomization[pi] = CreationOptions.IgnoreInheritance;
-                this.structure.CustomPropertySetters.Add(pi, ctx => value(ctx));
+                this.customization.SetPropertyCustomization(pi, CreationOptions.IgnoreInheritance);
+                this.customization.SetPropertySetter(pi, ctx => value(ctx));
             });
         }
 
@@ -177,9 +177,54 @@ namespace OrmMock
 
         public ForTypeContext<T> Skip() => this.SetCreationOptions(CreationOptions.Skip);
 
+        /// <summary>
+        /// Creates an object of the given type.
+        /// </summary>
+        /// <returns>The created object.</returns>
+        public T Create()
+        {
+            return this.objectContext.Create<T>();
+        }
+
+        /// <summary>
+        /// Creates an object of the given type.
+        /// </summary>
+        /// <typeparam name="T2">The type of the object.</typeparam>
+        /// <returns>The created object.</returns>
+        public T2 Create<T2>()
+        {
+            return this.objectContext.Create<T2>();
+        }
+
+        /// <summary>
+        /// Creates many objects of the given type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object.</typeparam>
+        /// <returns>The created objects.</returns>
+        public IEnumerable<T> CreateMany(int create = 3)
+        {
+            while (create-- > 0)
+            {
+                yield return this.Create();
+            }
+        }
+
+        /// <summary>
+        /// Creates many objects of the given type.
+        /// </summary>
+        /// <typeparam name="T2">The type of the object.</typeparam>
+        /// <returns>The created objects.</returns>
+        public IEnumerable<T2> CreateMany<T2>(int create = 3)
+        {
+            while (create-- > 0)
+            {
+                yield return this.Create<T2>();
+            }
+        }
+
         private ForTypeContext<T> SetCreationOptions(CreationOptions options)
         {
-            this.structure.TypeCustomization[typeof(T)] = options;
+            this.customization.SetTypeCustomization(typeof(T), options);
 
             return this;
         }
@@ -204,9 +249,9 @@ namespace OrmMock
             return this;
         }
 
-        private ForTypeContext<T> SetCreationOptions(Expression<Func<T, object>> e, CreationOptions options) => this.ForEach(e, pi => this.structure.PropertyCustomization[pi] = options);
+        private ForTypeContext<T> SetCreationOptions(Expression<Func<T, object>> e, CreationOptions options) => this.ForEach(e, pi => this.customization.SetPropertyCustomization(pi, options));
 
-        private ForTypeContext<T> SetCreationOptions(IList<PropertyInfo> properties, CreationOptions options) => this.ForEach(properties, pi => this.structure.PropertyCustomization[pi] = options);
+        private ForTypeContext<T> SetCreationOptions(IList<PropertyInfo> properties, CreationOptions options) => this.ForEach(properties, pi => this.customization.SetPropertyCustomization(pi, options));
 
         private void HandleInclude(int count, PropertyInfo pi)
         {
@@ -215,7 +260,7 @@ namespace OrmMock
                 throw new ArgumentException("Must be ICollection<>");
             }
 
-            this.structure.Include.Add(pi, count);
+            this.customization.SetIncludeCount(pi, count);
         }
     }
 }

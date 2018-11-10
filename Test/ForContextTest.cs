@@ -375,14 +375,24 @@ namespace Test
         }
 
         [Test]
-        public void TestBuildContext()
+        public void TestFork()
         {
-            var item = this.ctx.Build<SimpleClass>()
-                .With(x => x.Prop1, "foo")
+            this.ctx.For<SimpleClass>()
+                .Use(x => x.Prop2, "bar");
+
+            var item = this.ctx.Fork()
+                .For<SimpleClass>()
+                .Use(x => x.Prop1, "foo")
                 .Create();
 
             Assert.AreEqual("foo", item.Prop1);
-            Assert.AreNotEqual("foo", item.Prop2);
+            Assert.AreEqual("bar", item.Prop2);
+
+            var item2 = this.ctx
+                .Create<SimpleClass>();
+
+            Assert.AreNotEqual("foo", item2.Prop1);
+            Assert.AreEqual("bar", item.Prop2);
         }
     }
 }
