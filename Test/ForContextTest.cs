@@ -266,7 +266,7 @@ namespace Test
             {
                 Id = 123
             };
-            this.ctx.For<TestClass2>().Use(singleton);
+            this.ctx.For<TestClass2>().With(singleton);
 
             var result = this.ctx.CreateMany<TestClass1>(10).ToList();
 
@@ -303,7 +303,7 @@ namespace Test
         public void TestCustomSetter()
         {
             this.ctx.For<string>()
-                .Use(() => "str");
+                .With(() => "str");
 
             var obj = this.ctx.Create<SimpleClass>();
             Assert.AreEqual("str", obj.Prop1);
@@ -314,11 +314,11 @@ namespace Test
         public void TestCustomProperty()
         {
             this.ctx.For<string>()
-                .Use(() => "str");
+                .With(() => "str");
 
             this.ctx.For<SimpleClass>()
-                .Use(sc => sc.Prop1, _ => "str1")
-                .Use(sc => sc.Prop2, _ => "str2");
+                .With(sc => sc.Prop1, _ => "str1")
+                .With(sc => sc.Prop2, _ => "str2");
 
             var obj = this.ctx.Create<SimpleClass>();
             Assert.AreEqual("str1", obj.Prop1);
@@ -329,7 +329,7 @@ namespace Test
         public void TestWithoutType()
         {
             this.ctx.For<string>()
-                .Skip();
+                .Without();
 
             var obj = this.ctx.Create<SimpleClass>();
             Assert.IsNull(obj.Prop1);
@@ -340,7 +340,7 @@ namespace Test
         public void TestWithoutProperty()
         {
             this.ctx.For<SimpleClass>()
-                .Skip(sc => sc.Prop2);
+                .Without(sc => sc.Prop2);
 
             var obj = this.ctx.Create<SimpleClass>();
             Assert.IsNotEmpty(obj.Prop1);
@@ -379,10 +379,10 @@ namespace Test
         public void TestBuild()
         {
             this.ctx.For<SimpleClass>()
-                .Use(x => x.Prop2, "bar");
+                .With(x => x.Prop2, "bar");
 
             var item = this.ctx.Build<SimpleClass>()
-                .Use(x => x.Prop1, "foo")
+                .With(x => x.Prop1, "foo")
                 .Create();
 
             Assert.AreEqual("foo", item.Prop1);

@@ -18,9 +18,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+
+
 namespace OrmMock
 {
     using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Reflection;
     using Fasterflect;
 
     /// <summary>
@@ -47,19 +52,28 @@ namespace OrmMock
             return () => constructorDelegate();
         }
 
-        public static Action<object, object> SetPropertyValueInvoker(Type t, string property)
+        /// <summary>
+        /// Gets a function setting a specific property on an object.
+        /// </summary>
+        /// <param name="propertyInfo">The property to set.</param>
+        /// <returns></returns>
+        public static Action<object, object> SetPropertyValueInvoker(PropertyInfo propertyInfo)
         {
-            var setPropertyDelegate = t.DelegateForSetPropertyValue(property);
+            var setPropertyDelegate = propertyInfo.DeclaringType.DelegateForSetPropertyValue(propertyInfo.Name);
 
             return (obj, value) => setPropertyDelegate(obj, value);
         }
 
-        public static Func<object, object> GetPropertyValueInvoker(Type t, string property)
+        public static IList<Action<object, object>> SetPropertyValueInvokers(IEnumerable<PropertyInfo> propertyInfos) => propertyInfos.Select(SetPropertyValueInvoker).ToList();
+
+        public static Func<object, object> GetPropertyValueInvoker(PropertyInfo propertyInfo)
         {
-            var getPropertyDelegate = t.DelegateForGetPropertyValue(property);
+            var getPropertyDelegate = propertyInfo.DeclaringType.DelegateForGetPropertyValue(propertyInfo.Name);
 
             return obj => getPropertyDelegate(obj);
         }
+
+        public static IList<Func<object, object>> GetPropertyValueInvokers(IEnumerable<PropertyInfo> propertyInfos) => propertyInfos.Select(GetPropertyValueInvoker).ToList();
 
         public static Func<object, object, object> CallMethodWithOneArgumentInvoker(Type t, Type argumentType, string method)
         {
@@ -67,5 +81,7 @@ namespace OrmMock
 
             return (obj, arg) => callMethodDelegate(obj, arg);
         }
+
+        public static IList<PropertyInfo> GetPublicPropertiesWithGettersAndSetters(Type t) => t.GetProperties().Where(p => p.GetMethod != null && p.SetMethod != null).ToList();
     }
 }

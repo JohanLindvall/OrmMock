@@ -22,6 +22,9 @@ namespace OrmMock
 {
     using System;
 
+    /// <summary>
+    /// Implements generation of simple values.
+    /// </summary>
     public class ValueCreator
     {
         /// <summary>
@@ -29,6 +32,11 @@ namespace OrmMock
         /// </summary>
         private readonly Random random = new Random();
 
+        /// <summary>
+        /// Gets a value creator for the given object type. Returns null if no value creator exists.
+        /// </summary>
+        /// <param name="t">The type of the given object.</param>
+        /// <returns>A value creator or null.</returns>
         public Func<string, object> Get(Type t)
         {
             if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>))

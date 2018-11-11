@@ -95,6 +95,9 @@ namespace OrmMock
         /// </summary>
         public bool Logging { get; set; }
 
+        /// <summary>
+        /// Holds the relations between objects.
+        /// </summary>
         public Relations Relations { get; }
 
         public ObjectContext()
@@ -366,7 +369,7 @@ namespace OrmMock
                 var referenceProperties = new List<PropertyInfo>();
                 var propertyPlacement = new Dictionary<PropertyInfo, int>();
 
-                foreach (var property in inputType.GetProperties().Where(p => p.SetMethod != null))
+                foreach (var property in Reflection.GetPublicPropertiesWithGettersAndSetters(inputType))
                 {
                     if (this.customization.ShouldSkip(property))
                     {
@@ -377,7 +380,7 @@ namespace OrmMock
                     if (this.customization.TryGetPropertySetter(property, out var valueFunc))
                     {
                         propertyPlacement.Add(property, methods.Count);
-                        var setterDelegate = Reflection.SetPropertyValueInvoker(inputType, property.Name);
+                        var setterDelegate = Reflection.SetPropertyValueInvoker(property);
                         methods.Add((currentObject, _, currentSingleton) =>
                         {
                             if (!currentSingleton)
@@ -393,7 +396,7 @@ namespace OrmMock
                     if (localValueCreator != null)
                     {
                         propertyPlacement.Add(property, methods.Count);
-                        var setterDelegate = Reflection.SetPropertyValueInvoker(inputType, property.Name);
+                        var setterDelegate = Reflection.SetPropertyValueInvoker(property);
                         methods.Add((currentObject, _, currentSingleton) =>
                         {
                             if (!currentSingleton)
@@ -408,163 +411,178 @@ namespace OrmMock
                     }
                 }
 
-                for (var pass = 1; pass <= 2; ++pass)
+                if (referenceProperties.Any())
                 {
-                    // Pass 1, update pk id for 1:1 relation.
-                    // Pass 2, the rest.
-                    foreach (var p in referenceProperties)
-                    {
-                        var property = p;
-                        var propertyType = property.PropertyType;
-                        if (!this.customization.TryGetLookbackCount(property, out var lookbackCount))
-                        {
-                            lookbackCount = DefaultLookback;
-                        }
+                    var primaryKeyProps = this.Relations.GetPrimaryKeys(inputType);
 
-                        if (propertyType.IsGenericType)
+                    for (var pass = 1; pass <= 2; ++pass)
+                    {
+                        // Pass 1, update pk id for 1:1 relation.
+                        // Pass 2, the rest.
+                        foreach (var property in referenceProperties)
                         {
-                            if (propertyType.GetGenericTypeDefinition() == typeof(ICollection<>))
+                            var propertyType = property.PropertyType;
+                            if (!this.customization.TryGetLookbackCount(property, out var lookbackCount))
                             {
-                                if (pass != 2)
+                                lookbackCount = DefaultLookback;
+                            }
+
+                            if (propertyType.IsGenericType)
+                            {
+                                if (propertyType.GetGenericTypeDefinition() == typeof(ICollection<>))
+                                {
+                                    if (pass != 2)
+                                    {
+                                        continue;
+                                    }
+
+                                    var elementType = propertyType.GetGenericArguments()[0];
+                                    var collectionType = typeof(HashSet<>).MakeGenericType(elementType);
+                                    var collectionAdder = Reflection.CallMethodWithOneArgumentInvoker(collectionType, elementType, nameof(ICollection<int>.Add));
+                                    var hashSetCreator = Reflection.ParameterlessConstructorInvoker(collectionType);
+                                    var collectionTypeVerified = false;
+                                    var collectionSetter = Reflection.SetPropertyValueInvoker(property);
+                                    var collectionGetter = Reflection.GetPropertyValueInvoker(property);
+
+                                    methods.Add((currentObject, currentSources, currentSingleton) =>
+                                    {
+                                        var collection = collectionGetter(currentObject);
+                                        if (collection == null)
+                                        {
+                                            collectionTypeVerified = true;
+                                            collection = hashSetCreator();
+                                            collectionSetter(currentObject, collection);
+                                        }
+                                        else if (!collectionTypeVerified)
+                                        {
+                                            collectionTypeVerified = true;
+                                            var existingCollectionType = collection.GetType();
+                                            if (existingCollectionType != collectionType)
+                                            {
+                                                collectionAdder = Reflection.CallMethodWithOneArgumentInvoker(existingCollectionType, elementType, nameof(ICollection<int>.Add));
+                                                hashSetCreator = Reflection.ParameterlessConstructorInvoker(existingCollectionType);
+                                            }
+                                        }
+
+                                        var source = GetSource(currentSources, elementType, lookbackCount);
+
+                                        if (source != null)
+                                        {
+                                            collectionAdder(collection, source);
+                                        }
+                                        else
+                                        {
+                                            if (currentSingleton)
+                                            {
+                                                return; // The current value is an already existing singleton. Do not change any of its values.
+                                            }
+
+                                            if (!this.customization.TryGetIncludeCount(property, out int elementCount))
+                                            {
+                                                elementCount = currentSources.Count == 0 ? this.RootCollectionMembers : this.NonRootCollectionMembers;
+                                            }
+
+                                            currentSources.Add(currentObject);
+
+                                            for (var i = 0; i < elementCount; ++i)
+                                            {
+                                                collectionAdder(collection, CreateObject(elementType, currentSources));
+                                            }
+
+                                            currentSources.RemoveAt(currentSources.Count - 1);
+                                        }
+                                    });
+                                }
+                                else
+                                {
+                                    throw new InvalidOperationException("Unsupported type. Only generic types derived from ICollection<> are handled.");
+                                }
+                            }
+                            else
+                            {
+                                // Going from t to pt
+                                // Note that primary keys and foreign keys may be equal.
+                                var foreignKeyProps = this.Relations.GetForeignKeys(inputType, propertyType);
+
+                                var pkFkEqual = foreignKeyProps.SequenceEqual(primaryKeyProps);
+
+                                // Pass 1, only handle the case where the foreign key props and the primary key props are equal.
+                                // The foreign keys of a newly created objects need to be set first so that any additional created relations will have correct identifiers set
+                                if (pkFkEqual == (pass == 2))
                                 {
                                     continue;
                                 }
 
-                                var elementType = propertyType.GetGenericArguments()[0];
-                                var interfaceType = typeof(ICollection<>).MakeGenericType(elementType);
-                                var collectionType = typeof(HashSet<>).MakeGenericType(elementType);
-                                var collectionAdder = Reflection.CallMethodWithOneArgumentInvoker(interfaceType, elementType, nameof(ICollection<int>.Add));
-                                var hashSetCreator = Reflection.ParameterlessConstructorInvoker(collectionType);
-                                var collectionSetter = Reflection.SetPropertyValueInvoker(inputType, property.Name);
-                                var collectionGetter = Reflection.GetPropertyValueInvoker(inputType, property.Name);
+                                var foreignKeySetters = Reflection.SetPropertyValueInvokers(foreignKeyProps);
+                                var primaryKeyGetters = Reflection.GetPropertyValueInvokers(this.Relations.GetPrimaryKeys(propertyType)); // Getters in foreign object.
+                                var foreignObjectGetter = Reflection.GetPropertyValueInvoker(property);
+                                var foreignObjectSetter = Reflection.SetPropertyValueInvoker(property);
+
+                                var foreignKeyNullableGetDelegate = foreignKeyProps.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(Reflection.GetPropertyValueInvoker).FirstOrDefault();
 
                                 methods.Add((currentObject, currentSources, currentSingleton) =>
                                 {
-                                    var collection = collectionGetter(currentObject);
-                                    if (collection == null)
+                                    // Handle nullable
+                                    object foreignObject = null;
+
+                                    if (foreignKeyNullableGetDelegate == null || foreignKeyNullableGetDelegate(currentObject) != null)
                                     {
-                                        collection = hashSetCreator();
-                                        collectionSetter(currentObject, collection);
+                                        foreignObject = GetSource(currentSources, propertyType, lookbackCount);
+
+                                        if (foreignObject == null)
+                                        {
+                                            currentSources.Add(currentObject);
+
+                                            foreignObject = this.CreateObject(propertyType, currentSources);
+
+                                            currentSources.RemoveAt(currentSources.Count - 1);
+                                        }
                                     }
 
-                                    var source = GetSource(currentSources, elementType, lookbackCount);
-
-                                    if (source != null)
+                                    if (currentSingleton)
                                     {
-                                        collectionAdder(collection, source);
+                                        var existing = foreignObjectGetter(currentObject);
+
+                                        if (!ReferenceEquals(foreignObject, existing) && existing != null)
+                                        {
+                                            throw new InvalidOperationException($"Ambiguous property for singleton {inputType.Name}.{property.Name}.");
+                                        }
                                     }
-                                    else
-                                    {
-                                        if (currentSingleton)
-                                        {
-                                            return; // The current value is an already existing singleton. Do not change any of its values.
-                                        }
-
-                                        if (!this.customization.TryGetIncludeCount(property, out int elementCount))
-                                        {
-                                            elementCount = currentSources.Count == 0 ? this.RootCollectionMembers : this.NonRootCollectionMembers;
-                                        }
-
-                                        currentSources.Add(currentObject);
-
-                                        for (var i = 0; i < elementCount; ++i)
-                                        {
-                                            collectionAdder(collection, CreateObject(elementType, currentSources));
-                                        }
-
-                                        currentSources.RemoveAt(currentSources.Count - 1);
-                                    }
-                                });
-                            }
-                            else
-                            {
-                                throw new InvalidOperationException("Unsupported type. Only generic types derived from ICollection<> are handled.");
-                            }
-                        }
-                        else
-                        {
-                            // Going from t to pt
-                            // Note that primary keys and foreign keys may be equal.
-                            var foreignKeyProps = this.Relations.GetForeignKeys(inputType, propertyType);
-                            var primaryKeyProps = this.Relations.GetPrimaryKeys(inputType);
-
-                            var pkFkEqual = foreignKeyProps.SequenceEqual(primaryKeyProps);
-
-                            // Pass 1, only handle the case where the foreign key props and the primary key props are equal.
-                            // The foreign keys of a newly created objects need to be set first so that any additional created relations will have correct identifiers set
-                            if (pkFkEqual == (pass == 2))
-                            {
-                                continue;
-                            }
-
-                            var foreignKeySetDelegates = foreignKeyProps.Select(fkp => Reflection.SetPropertyValueInvoker(inputType, fkp.Name)).ToList();
-                            var primaryKeyGetDelegates = primaryKeyProps.Select(pkp => Reflection.GetPropertyValueInvoker(propertyType, pkp.Name)).ToList();
-                            var foreignObjectGetter = Reflection.GetPropertyValueInvoker(inputType, property.Name);
-                            var foreignObjectSetter = Reflection.SetPropertyValueInvoker(inputType, property.Name);
-
-                            var foreignKeyNullableGetDelegate = foreignKeyProps.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(fkp => Reflection.GetPropertyValueInvoker(inputType, fkp.Name)).FirstOrDefault();
-
-                            methods.Add((currentObject, currentSources, currentSingleton) =>
-                            {
-                                // Handle nullable
-                                object foreignObject = null;
-
-                                if (foreignKeyNullableGetDelegate == null || foreignKeyNullableGetDelegate(currentObject) != null)
-                                {
-                                    foreignObject = GetSource(currentSources, propertyType, lookbackCount);
 
                                     if (foreignObject == null)
                                     {
-                                        currentSources.Add(currentObject);
-
-                                        foreignObject = this.CreateObject(propertyType, currentSources);
-
-                                        currentSources.RemoveAt(currentSources.Count - 1);
-                                    }
-                                }
-
-                                if (currentSingleton)
-                                {
-                                    var existing = foreignObjectGetter(currentObject);
-
-                                    if (!ReferenceEquals(foreignObject, existing) && existing != null)
-                                    {
-                                        throw new InvalidOperationException($"Ambiguous property for singleton {inputType.Name}.{p.Name}.");
-                                    }
-                                }
-
-                                if (foreignObject == null)
-                                {
-                                    // Clear nullable foreign keys
-                                    if (foreignKeyNullableGetDelegate != null)
-                                    {
-                                        for (var i = 0; i < foreignKeyProps.Length; ++i)
+                                        // Clear nullable foreign keys
+                                        if (foreignKeyNullableGetDelegate != null)
                                         {
-                                            foreignKeySetDelegates[i](currentObject, null);
+                                            for (var i = 0; i < foreignKeyProps.Length; ++i)
+                                            {
+                                                foreignKeySetters[i](currentObject, null);
+                                            }
                                         }
                                     }
-                                }
-                                else
-                                {
-                                    // Set foreign keys to primary keys of related object.
-                                    for (var i = 0; i < foreignKeyProps.Length; ++i)
+                                    else
                                     {
-                                        foreignKeySetDelegates[i](currentObject, primaryKeyGetDelegates[i](foreignObject));
+                                        // Set foreign keys to primary keys of related object.
+                                        for (var i = 0; i < foreignKeyProps.Length; ++i)
+                                        {
+                                            foreignKeySetters[i](currentObject, primaryKeyGetters[i](foreignObject));
+                                        }
+
+                                        foreignObjectSetter(currentObject, foreignObject);
                                     }
+                                });
 
-                                    foreignObjectSetter(currentObject, foreignObject);
-                                }
-                            });
-
-                            if (!pkFkEqual)
-                            {
-                                for (var i = foreignKeyNullableGetDelegate == null ? 0 : 1; i < foreignKeyProps.Length; i++)
+                                // For non 1:1-relations - remove the code setting the foreign keys to generated values. (For 1:1-relations, this would remove the code setting primary keys)
+                                if (!pkFkEqual)
                                 {
-                                    var foreignKeyProp = foreignKeyProps[i];
-
-                                    if (propertyPlacement.TryGetValue(foreignKeyProp, out var methodIndex))
+                                    for (var i = foreignKeyNullableGetDelegate == null ? 0 : 1; i < foreignKeyProps.Length; i++)
                                     {
-                                        methods[methodIndex] = null;
+                                        var foreignKeyProp = foreignKeyProps[i];
+
+                                        if (propertyPlacement.TryGetValue(foreignKeyProp, out var methodIndex))
+                                        {
+                                            methods[methodIndex] = null;
+                                        }
                                     }
                                 }
                             }
