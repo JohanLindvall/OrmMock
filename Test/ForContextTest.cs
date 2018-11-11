@@ -375,13 +375,12 @@ namespace Test
         }
 
         [Test]
-        public void TestFork()
+        public void TestBuild()
         {
             this.ctx.For<SimpleClass>()
                 .Use(x => x.Prop2, "bar");
 
-            var item = this.ctx.Fork()
-                .For<SimpleClass>()
+            var item = this.ctx.Build<SimpleClass>()
                 .Use(x => x.Prop1, "foo")
                 .Create();
 

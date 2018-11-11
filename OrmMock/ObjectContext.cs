@@ -140,9 +140,9 @@ namespace OrmMock
         /// Forks the current object context.
         /// </summary>
         /// <returns>A typed build context.</returns>
-        public ObjectContext Fork()
+        public ForTypeContext<T> Build<T>()
         {
-            return new ObjectContext(new Customization(this.customization), this.Relations);
+            return new ObjectContext(new Customization(this.customization), this.Relations).For<T>();
         }
 
         /// <summary>

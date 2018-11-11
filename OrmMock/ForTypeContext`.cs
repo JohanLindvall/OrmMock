@@ -187,16 +187,6 @@ namespace OrmMock
         }
 
         /// <summary>
-        /// Creates an object of the given type.
-        /// </summary>
-        /// <typeparam name="T2">The type of the object.</typeparam>
-        /// <returns>The created object.</returns>
-        public T2 Create<T2>()
-        {
-            return this.objectContext.Create<T2>();
-        }
-
-        /// <summary>
         /// Creates many objects of the given type.
         /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
@@ -206,19 +196,6 @@ namespace OrmMock
             while (create-- > 0)
             {
                 yield return this.Create();
-            }
-        }
-
-        /// <summary>
-        /// Creates many objects of the given type.
-        /// </summary>
-        /// <typeparam name="T2">The type of the object.</typeparam>
-        /// <returns>The created objects.</returns>
-        public IEnumerable<T2> CreateMany<T2>(int create = 3)
-        {
-            while (create-- > 0)
-            {
-                yield return this.Create<T2>();
             }
         }
 
