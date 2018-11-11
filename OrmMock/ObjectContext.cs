@@ -86,6 +86,11 @@ namespace OrmMock
         public int NonRootCollectionMembers { get; set; } = 0;
 
         /// <summary>
+        /// Gets or sets the default look-back value.
+        /// </summary>
+        public int DefaultLookback { get; set; } = 1;
+
+        /// <summary>
         /// Gets or sets a value determining if logging of object creation should be enabled.
         /// </summary>
         public bool Logging { get; set; }
@@ -361,14 +366,9 @@ namespace OrmMock
                 var referenceProperties = new List<PropertyInfo>();
                 var propertyPlacement = new Dictionary<PropertyInfo, int>();
 
-                foreach (var p in inputType.GetProperties().Where(p => p.SetMethod != null))
+                foreach (var property in inputType.GetProperties().Where(p => p.SetMethod != null))
                 {
-                    var property = p;
-                    var propertyType = property.PropertyType;
-
-                    var effectiveCreationOptions = this.customization.GetEffectiveCreationsOptions(property);
-
-                    if (effectiveCreationOptions == CreationOptions.Skip)
+                    if (this.customization.ShouldSkip(property))
                     {
                         // add nothing to methods.
                         continue;
@@ -389,7 +389,7 @@ namespace OrmMock
                         continue;
                     }
 
-                    var localValueCreator = this.GetValueCreator(propertyType);
+                    var localValueCreator = this.GetValueCreator(property.PropertyType);
                     if (localValueCreator != null)
                     {
                         propertyPlacement.Add(property, methods.Count);
@@ -416,11 +416,10 @@ namespace OrmMock
                     {
                         var property = p;
                         var propertyType = property.PropertyType;
-                        var effectiveCreationOptions = this.customization.GetEffectiveCreationsOptions(property);
-
-                        var noAncestry = effectiveCreationOptions == CreationOptions.IgnoreInheritance;
-                        var onlyDirectAncestry = effectiveCreationOptions == CreationOptions.OnlyDirectInheritance;
-                        var onlyAncestry = onlyDirectAncestry || effectiveCreationOptions == CreationOptions.OnlyInheritance;
+                        if (!this.customization.TryGetLookbackCount(property, out var lookbackCount))
+                        {
+                            lookbackCount = DefaultLookback;
+                        }
 
                         if (propertyType.IsGenericType)
                         {
@@ -432,7 +431,7 @@ namespace OrmMock
                                 }
 
                                 var elementType = propertyType.GetGenericArguments()[0];
-                                var interfaceType = typeof(HashSet<>).MakeGenericType(elementType);
+                                var interfaceType = typeof(ICollection<>).MakeGenericType(elementType);
                                 var collectionType = typeof(HashSet<>).MakeGenericType(elementType);
                                 var collectionAdder = Reflection.CallMethodWithOneArgumentInvoker(interfaceType, elementType, nameof(ICollection<int>.Add));
                                 var hashSetCreator = Reflection.ParameterlessConstructorInvoker(collectionType);
@@ -448,7 +447,7 @@ namespace OrmMock
                                         collectionSetter(currentObject, collection);
                                     }
 
-                                    var source = noAncestry ? null : GetSource(currentSources, elementType, 1); // note that only one level of inheritance is considered here
+                                    var source = GetSource(currentSources, elementType, lookbackCount);
 
                                     if (source != null)
                                     {
@@ -456,9 +455,9 @@ namespace OrmMock
                                     }
                                     else
                                     {
-                                        if (currentSingleton || onlyAncestry)
+                                        if (currentSingleton)
                                         {
-                                            return;
+                                            return; // The current value is an already existing singleton. Do not change any of its values.
                                         }
 
                                         if (!this.customization.TryGetIncludeCount(property, out int elementCount))
@@ -479,7 +478,7 @@ namespace OrmMock
                             }
                             else
                             {
-                                throw new InvalidOperationException("Unsupported type");
+                                throw new InvalidOperationException("Unsupported type. Only generic types derived from ICollection<> are handled.");
                             }
                         }
                         else
@@ -492,14 +491,8 @@ namespace OrmMock
                             var pkFkEqual = foreignKeyProps.SequenceEqual(primaryKeyProps);
 
                             // Pass 1, only handle the case where the foreign key props and the primary key props are equal.
-                            if (pkFkEqual)
-                            {
-                                if (pass == 2)
-                                {
-                                    continue;
-                                }
-                            }
-                            else if (pass == 1)
+                            // The foreign keys of a newly created objects need to be set first so that any additional created relations will have correct identifiers set
+                            if (pkFkEqual == (pass == 2))
                             {
                                 continue;
                             }
@@ -518,9 +511,9 @@ namespace OrmMock
 
                                 if (foreignKeyNullableGetDelegate == null || foreignKeyNullableGetDelegate(currentObject) != null)
                                 {
-                                    foreignObject = noAncestry ? null : GetSource(currentSources, propertyType, onlyDirectAncestry ? 1 : int.MaxValue);
+                                    foreignObject = GetSource(currentSources, propertyType, lookbackCount);
 
-                                    if (foreignObject == null && !onlyAncestry)
+                                    if (foreignObject == null)
                                     {
                                         currentSources.Add(currentObject);
 

@@ -30,14 +30,24 @@ namespace OrmMock
     public class Customization
     {
         /// <summary>
-        /// Gets the customized types.
+        /// Holds the set of types to skip (i.e. not include when creating objects).
         /// </summary>
-        private readonly Dictionary<Type, CreationOptions> typeCustomizationDict = new Dictionary<Type, CreationOptions>();
+        private readonly HashSet<Type> typeSkipDict = new HashSet<Type>();
 
         /// <summary>
-        /// Gets the customized properties.
+        /// Holds the set of properties to skip (not include when creating objects).
         /// </summary>
-        private readonly Dictionary<PropertyInfo, CreationOptions> propertyCustomizationDict = new Dictionary<PropertyInfo, CreationOptions>();
+        private readonly HashSet<PropertyInfo> propertySkipDict = new HashSet<PropertyInfo>();
+
+        /// <summary>
+        /// Gets the lookback dictionary for types.
+        /// </summary>
+        private readonly Dictionary<Type, int> typeLookbackDictionary = new Dictionary<Type, int>();
+
+        /// <summary>
+        /// Gets the lookback dictionary for properties.
+        /// </summary>
+        private readonly Dictionary<PropertyInfo, int> propertyLookbackDictionary = new Dictionary<PropertyInfo, int>();
 
         /// <summary>
         /// Holds the dictionary of navigation properties to include and the count of items to create.
@@ -71,29 +81,24 @@ namespace OrmMock
             this.ancestor = ancestor;
         }
 
-        private bool TryGetPropertyCustomization(PropertyInfo property, out CreationOptions creationOptions)
+        public bool ShouldSkip(Type t)
         {
-            return this.propertyCustomizationDict.TryGetValue(property, out creationOptions) || this.ancestor != null && !this.ancestor.TryGetPropertyCustomization(property, out creationOptions);
-
+            return this.typeSkipDict.Contains(t) || (this.ancestor?.ShouldSkip(t) ?? false);
         }
 
-        private bool TryGetTypeCustomization(Type type, out CreationOptions creationOptions)
+        public void Skip(Type t)
         {
-            return this.typeCustomizationDict.TryGetValue(type, out creationOptions) || this.ancestor != null && !this.ancestor.TryGetTypeCustomization(type, out creationOptions);
-
+            this.typeSkipDict.Add(t);
         }
 
-        public CreationOptions GetEffectiveCreationsOptions(PropertyInfo property)
+        public bool ShouldSkip(PropertyInfo pi)
         {
-            if (!this.TryGetPropertyCustomization(property, out var effectiveCreationOptions))
-            {
-                if (!this.TryGetTypeCustomization(property.PropertyType, out effectiveCreationOptions))
-                {
-                    effectiveCreationOptions = CreationOptions.Default;
-                }
-            }
+            return this.typeSkipDict.Contains(pi.PropertyType) || this.propertySkipDict.Contains(pi) || (this.ancestor?.ShouldSkip(pi) ?? false);
+        }
 
-            return effectiveCreationOptions;
+        public void Skip(PropertyInfo pi)
+        {
+            this.propertySkipDict.Add(pi);
         }
 
         public bool TryGetIncludeCount(PropertyInfo property, out int includeCount)
@@ -106,14 +111,24 @@ namespace OrmMock
             this.includeCountDict[property] = includeCount;
         }
 
-        public void SetPropertyCustomization(PropertyInfo property, CreationOptions options)
+        public bool TryGetLookbackCount(Type type, out int lookbackCount)
         {
-            this.propertyCustomizationDict[property] = options;
+            return this.typeLookbackDictionary.TryGetValue(type, out lookbackCount) || this.ancestor != null && this.ancestor.TryGetLookbackCount(type, out lookbackCount);
         }
 
-        public void SetTypeCustomization(Type type, CreationOptions options)
+        public void SetLookbackCount(Type type, int lookbackCount)
         {
-            this.typeCustomizationDict[type] = options;
+            this.typeLookbackDictionary[type] = lookbackCount;
+        }
+
+        public bool TryGetLookbackCount(PropertyInfo property, out int lookbackCount)
+        {
+            return this.propertyLookbackDictionary.TryGetValue(property, out lookbackCount) || this.typeLookbackDictionary.TryGetValue(property.PropertyType, out lookbackCount) || (this.ancestor?.TryGetLookbackCount(property, out lookbackCount) ?? false);
+        }
+
+        public void SetLookbackCount(PropertyInfo property, int lookbackCount)
+        {
+            this.propertyLookbackDictionary[property] = lookbackCount;
         }
 
         public void SetPropertySetter(PropertyInfo property, Func<ObjectContext, object> setter)

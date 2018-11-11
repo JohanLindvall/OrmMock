@@ -287,6 +287,7 @@ namespace Test
         [Test]
         public void TestCircular()
         {
+            this.ctx.DefaultLookback = 10;
             var objs = this.ctx.Create<TestCircularClass>();
             Assert.AreEqual(3, this.ctx.GetObjects().Count());
         }

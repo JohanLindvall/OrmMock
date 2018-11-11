@@ -29,7 +29,7 @@ namespace OrmMock
     /// Implements a for-type context, where type-specific information is set.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class ForTypeContext<T> : ICreationsOptions<T>
+    public class ForTypeContext<T>
     {
         /// <summary>
         /// Holds the object context.
@@ -78,7 +78,7 @@ namespace OrmMock
         /// <returns>The generator.</returns>
         public void Use(Func<string, T> creator)
         {
-            this.customization.SetTypeCustomization(typeof(T), CreationOptions.IgnoreInheritance);
+            this.customization.SetLookbackCount(typeof(T), 0);
             this.customization.SetCustomConstructor(typeof(T), (_, s) => creator(s));
         }
 
@@ -134,7 +134,7 @@ namespace OrmMock
         {
             return this.ForEach(e, pi =>
             {
-                this.customization.SetPropertyCustomization(pi, CreationOptions.IgnoreInheritance);
+                this.customization.SetLookbackCount(pi, 0);
                 this.customization.SetPropertySetter(pi, ctx => value(ctx));
             });
         }
@@ -143,39 +143,37 @@ namespace OrmMock
         /// Excludes a property from being set. The default value will be used.
         /// </summary>
         /// <returns>The type context.</returns>
-        public ForTypeContext<T> Skip(Expression<Func<T, object>> e) => this.SetCreationOptions(e, CreationOptions.Skip);
+        public ForTypeContext<T> Skip(Expression<Func<T, object>> e) => this.ForEach(e, this.customization.Skip);
 
         /// <summary>
         /// Excludes a property from being set. The default value will be used.
         /// </summary>
         /// <returns>The type context.</returns>
-        public ForTypeContext<T> Skip(IList<PropertyInfo> properties) => this.SetCreationOptions(properties, CreationOptions.Skip);
+        public ForTypeContext<T> Skip(IList<PropertyInfo> properties) => this.ForEach(properties, this.customization.Skip);
 
         /// <summary>
-        /// Parents are ignored for this property. A new object is always created.
+        /// Excludes a property from being set. The default value will be used.
         /// </summary>
         /// <returns>The type context.</returns>
-        public ForTypeContext<T> IgnoreParents(Expression<Func<T, object>> e) => this.SetCreationOptions(e, CreationOptions.IgnoreInheritance);
+        public ForTypeContext<T> SetLookback(Expression<Func<T, object>> e, int lookback) => this.ForEach(e, pi => this.customization.SetLookbackCount(pi, lookback));
 
         /// <summary>
-        /// Only direct parents are used for this parameter. A new object is not created.
+        /// Excludes a property from being set. The default value will be used.
         /// </summary>
         /// <returns>The type context.</returns>
-        public ForTypeContext<T> OnlyDirectParent(Expression<Func<T, object>> e) => this.SetCreationOptions(e, CreationOptions.OnlyDirectInheritance);
+        public ForTypeContext<T> SetLookback(IList<PropertyInfo> properties, int lookback) => this.ForEach(properties, pi => this.customization.SetLookbackCount(pi, lookback));
 
-        /// <summary>
-        /// Only parents are used for this parameter. A new object is not created.
-        /// </summary>
-        /// <returns>The type context.</returns>
-        public ForTypeContext<T> OnlyParents(Expression<Func<T, object>> e) => this.SetCreationOptions(e, CreationOptions.OnlyInheritance);
+        public ForTypeContext<T> SetLookback(int count)
+        {
+            this.customization.SetLookbackCount(typeof(T), count);
+            return this;
+        }
 
-        public ForTypeContext<T> IgnoreParents() => this.SetCreationOptions(CreationOptions.IgnoreInheritance);
-
-        public ForTypeContext<T> OnlyDirectParent() => this.SetCreationOptions(CreationOptions.OnlyDirectInheritance);
-
-        public ForTypeContext<T> OnlyParents() => this.SetCreationOptions(CreationOptions.OnlyInheritance);
-
-        public ForTypeContext<T> Skip() => this.SetCreationOptions(CreationOptions.Skip);
+        public ForTypeContext<T> Skip()
+        {
+            this.customization.Skip(typeof(T));
+            return this;
+        }
 
         /// <summary>
         /// Creates an object of the given type.
@@ -199,13 +197,6 @@ namespace OrmMock
             }
         }
 
-        private ForTypeContext<T> SetCreationOptions(CreationOptions options)
-        {
-            this.customization.SetTypeCustomization(typeof(T), options);
-
-            return this;
-        }
-
         private ForTypeContext<T> ForEach<T2>(Expression<Func<T, T2>> e, Action<PropertyInfo> action)
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(e))
@@ -225,10 +216,6 @@ namespace OrmMock
 
             return this;
         }
-
-        private ForTypeContext<T> SetCreationOptions(Expression<Func<T, object>> e, CreationOptions options) => this.ForEach(e, pi => this.customization.SetPropertyCustomization(pi, options));
-
-        private ForTypeContext<T> SetCreationOptions(IList<PropertyInfo> properties, CreationOptions options) => this.ForEach(properties, pi => this.customization.SetPropertyCustomization(pi, options));
 
         private void HandleInclude(int count, PropertyInfo pi)
         {

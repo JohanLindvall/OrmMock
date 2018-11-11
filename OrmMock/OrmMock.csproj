@@ -48,10 +48,8 @@
   <ItemGroup>
     <Compile Include="Comparers\ObjectArrayComparer.cs" />
     <Compile Include="Comparers\ObjectEqualityComparer.cs" />
-    <Compile Include="CreationOptions.cs" />
     <Compile Include="ExpressionUtility.cs" />
     <Compile Include="ForTypeContext`.cs" />
-    <Compile Include="ICreationsOptions.cs" />
     <Compile Include="MemDb.cs" />
     <Compile Include="ObjectContext.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
