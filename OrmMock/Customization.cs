@@ -30,135 +30,220 @@ namespace OrmMock
     public class Customization
     {
         /// <summary>
-        /// Holds the set of types to skip (i.e. not include when creating objects).
+        /// Holds the dictionary of type customizations.
         /// </summary>
-        private readonly HashSet<Type> typeSkipDict = new HashSet<Type>();
+        private readonly Dictionary<Type, TypeCustomization> typeCustomizations = new Dictionary<Type, TypeCustomization>();
 
         /// <summary>
-        /// Holds the set of properties to skip (not include when creating objects).
+        /// Holds the dictionary of property customizations.
         /// </summary>
-        private readonly HashSet<PropertyInfo> propertySkipDict = new HashSet<PropertyInfo>();
+        private readonly Dictionary<PropertyInfo, PropertyCustomization> propertyCustomizations = new Dictionary<PropertyInfo, PropertyCustomization>();
 
         /// <summary>
-        /// Gets the lookback dictionary for types.
+        /// Holds the ancestor of the customization instance.
         /// </summary>
-        private readonly Dictionary<Type, int> typeLookbackDictionary = new Dictionary<Type, int>();
-
-        /// <summary>
-        /// Gets the lookback dictionary for properties.
-        /// </summary>
-        private readonly Dictionary<PropertyInfo, int> propertyLookbackDictionary = new Dictionary<PropertyInfo, int>();
-
-        /// <summary>
-        /// Holds the dictionary of navigation properties to include and the count of items to create.
-        /// </summary>
-        private readonly Dictionary<PropertyInfo, int> includeCountDict = new Dictionary<PropertyInfo, int>();
-
-        /// <summary>
-        /// Holds the dictionary of singleton types.
-        /// </summary>
-        private readonly HashSet<Type> singletons = new HashSet<Type>();
-
-        /// <summary>
-        /// Holds the dictionary of custom property setters.
-        /// </summary>
-        private readonly Dictionary<PropertyInfo, Func<ObjectContext, object>> customPropertySetters = new Dictionary<PropertyInfo, Func<ObjectContext, object>>();
-
-        /// <summary>
-        /// Holds the dictionary of custom constructors.
-        /// </summary>
-        private readonly Dictionary<Type, Func<ObjectContext, string, object>> customConstructors = new Dictionary<Type, Func<ObjectContext, string, object>>();
-
         private readonly Customization ancestor;
 
+        /// <summary>
+        /// Initializes a new instance of the Customization class.
+        /// </summary>
         public Customization() : this(null)
         {
 
         }
 
+        /// <summary>
+        /// Initializes a new instance of the Customization class.
+        /// </summary>
+        /// <param name="ancestor">The customization ancestor.</param>
         public Customization(Customization ancestor)
         {
             this.ancestor = ancestor;
         }
 
+        /// <summary>
+        /// Returns a value indicating whether the given type should be skipped when encountered in the object graph.
+        /// </summary>
+        /// <param name="t">The type of the object.</param>
+        /// <returns></returns>
         public bool ShouldSkip(Type t)
         {
-            return this.typeSkipDict.Contains(t) || (this.ancestor?.ShouldSkip(t) ?? false);
+            return this.Get(t)?.Skip ?? this.ancestor?.ShouldSkip(t) ?? false;
         }
 
+        /// <summary>
+        /// Skips the given type from inclusion in the object graph.
+        /// </summary>
+        /// <param name="t">The type of the object to skip.</param>
         public void Skip(Type t)
         {
-            this.typeSkipDict.Add(t);
+            this.GetOrAdd(t).Skip = true;
         }
 
+        /// <summary>
+        /// Returns a value indicating whether the given property should be skipped when encountered in the object graph.
+        /// </summary>
+        /// <param name="pi"></param>
+        /// <returns></returns>
         public bool ShouldSkip(PropertyInfo pi)
         {
-            return this.typeSkipDict.Contains(pi.PropertyType) || this.propertySkipDict.Contains(pi) || (this.ancestor?.ShouldSkip(pi) ?? false);
+            return this.GetOrAdd(pi)?.Skip ?? this.GetOrAdd(pi.PropertyType)?.Skip ?? this.ancestor?.ShouldSkip(pi) ?? false;
         }
 
+        /// <summary>
+        /// Skips the given property in the object graph.
+        /// </summary>
+        /// <param name="pi"></param>
         public void Skip(PropertyInfo pi)
         {
-            this.propertySkipDict.Add(pi);
+            this.GetOrAdd(pi).Skip = true;
         }
 
-        public bool TryGetIncludeCount(PropertyInfo property, out int includeCount)
+        /// <summary>
+        /// Gets the include count for the given property.
+        /// </summary>
+        /// <param name="property">The property.</param>
+        /// <param name="includeCount">The default include count.</param>
+        /// <returns>True if the include count was found, false otherwise.</returns>
+        public int GetIncludeCount(PropertyInfo property, int includeCount)
         {
-            return this.includeCountDict.TryGetValue(property, out includeCount) || this.ancestor != null && this.ancestor.TryGetIncludeCount(property, out includeCount);
+            return this.Get(property)?.IncludeCount ?? this.ancestor?.GetIncludeCount(property, includeCount) ?? includeCount;
         }
 
+        /// <summary>
+        /// Sets the include count for the given property.
+        /// </summary>
+        /// <param name="property">The property.</param>
+        /// <param name="includeCount">The include count.</param>
         public void SetIncludeCount(PropertyInfo property, int includeCount)
         {
-            this.includeCountDict[property] = includeCount;
+            this.GetOrAdd(property).IncludeCount = includeCount;
         }
 
-        public bool TryGetLookbackCount(Type type, out int lookbackCount)
+        /// <summary>
+        /// Gets the lookback count for the given type.
+        /// </summary>
+        /// <param name="type">The type of the property.</param>
+        /// <param name="defaultLookback">The default lookback count.</param>
+        /// <returns>The lookback count</returns>
+        public int GetLookbackCount(Type type, int defaultLookback)
         {
-            return this.typeLookbackDictionary.TryGetValue(type, out lookbackCount) || this.ancestor != null && this.ancestor.TryGetLookbackCount(type, out lookbackCount);
+            return this.Get(type)?.LookbackCount ?? this.ancestor?.Get(type)?.LookbackCount ?? defaultLookback;
         }
 
         public void SetLookbackCount(Type type, int lookbackCount)
         {
-            this.typeLookbackDictionary[type] = lookbackCount;
+            this.GetOrAdd(type).LookbackCount = lookbackCount;
         }
 
-        public bool TryGetLookbackCount(PropertyInfo property, out int lookbackCount)
+        public int GetLookbackCount(PropertyInfo property, int defaultLookbackCount)
         {
-            return this.propertyLookbackDictionary.TryGetValue(property, out lookbackCount) || this.typeLookbackDictionary.TryGetValue(property.PropertyType, out lookbackCount) || (this.ancestor?.TryGetLookbackCount(property, out lookbackCount) ?? false);
+            return this.Get(property)?.LookbackCount ?? this.Get(property.PropertyType)?.LookbackCount ?? this.ancestor?.GetLookbackCount(property, defaultLookbackCount) ?? defaultLookbackCount;
         }
 
         public void SetLookbackCount(PropertyInfo property, int lookbackCount)
         {
-            this.propertyLookbackDictionary[property] = lookbackCount;
+            this.GetOrAdd(property).LookbackCount = lookbackCount;
         }
 
         public void SetPropertySetter(PropertyInfo property, Func<ObjectContext, object> setter)
         {
-            this.customPropertySetters[property] = setter;
+            this.GetOrAdd(property).CustomValue = setter;
         }
 
-        public bool TryGetPropertySetter(PropertyInfo pi, out Func<ObjectContext, object> setter)
+        public Func<ObjectContext, object> GetPropertyConstructor(PropertyInfo pi)
         {
-            return this.customPropertySetters.TryGetValue(pi, out setter) || this.ancestor != null && this.ancestor.TryGetPropertySetter(pi, out setter);
+            var setter = this.Get(pi)?.CustomValue;
+
+            if (setter == null)
+            {
+                var constructor = this.Get(pi.PropertyType).Constructor;
+
+                if (constructor != null)
+                {
+                    setter = ctx => constructor(ctx, pi.Name);
+                }
+            }
+
+            return setter ?? this.ancestor?.GetPropertyConstructor(pi);
         }
 
         public void SetCustomConstructor(Type type, Func<ObjectContext, string, object> constructor)
         {
-            this.customConstructors[type] = constructor;
+            this.GetOrAdd(type).Constructor = constructor;
         }
 
-        public bool TryGetCustomConstructor(Type type, out Func<ObjectContext, string, object> constructor)
+        public Func<ObjectContext, string, object> GetCustomConstructor(Type type)
         {
-            return this.customConstructors.TryGetValue(type, out constructor) || this.ancestor != null && this.ancestor.TryGetCustomConstructor(type, out constructor);
+            return this.Get(type)?.Constructor ?? this.ancestor?.GetCustomConstructor(type);
         }
 
         public void RegisterSingleton(Type t)
         {
-            this.singletons.Add(t);
+            this.GetOrAdd(t).Singleton = true;
         }
 
         public bool ShouldBeSingleton(Type t)
         {
-            return this.singletons.Contains(t) || this.ancestor != null && this.ancestor.ShouldBeSingleton(t);
+            return this.Get(t)?.Singleton ?? this.ancestor?.ShouldBeSingleton(t) ?? false;
+        }
+
+        private TypeCustomization Get(Type t)
+        {
+            this.typeCustomizations.TryGetValue(t, out var result);
+
+            return result;
+        }
+
+        private TypeCustomization GetOrAdd(Type t)
+        {
+            if (!this.typeCustomizations.TryGetValue(t, out var result))
+            {
+                result = new TypeCustomization();
+                this.typeCustomizations.Add(t, result);
+            }
+
+            return result;
+        }
+
+        private PropertyCustomization Get(PropertyInfo propertyInfo)
+        {
+            this.propertyCustomizations.TryGetValue(propertyInfo, out var result);
+
+            return result;
+        }
+
+        private PropertyCustomization GetOrAdd(PropertyInfo propertyInfo)
+        {
+            if (!this.propertyCustomizations.TryGetValue(propertyInfo, out var result))
+            {
+                result = new PropertyCustomization();
+                this.propertyCustomizations.Add(propertyInfo, result);
+            }
+
+            return result;
+        }
+
+        private class TypeCustomization
+        {
+            public bool? Singleton { get; set; }
+
+            public bool? Skip { get; set; }
+
+            public int? LookbackCount { get; set; }
+
+            public Func<ObjectContext, string, object> Constructor { get; set; }
+        }
+
+        private class PropertyCustomization
+        {
+            public int? IncludeCount { get; set; }
+
+            public bool? Skip { get; set; }
+
+            public int? LookbackCount { get; set; }
+
+            public Func<ObjectContext, object> CustomValue { get; set; }
         }
     }
 }

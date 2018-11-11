@@ -202,6 +202,13 @@ namespace Test
             public string Prop2 { get; set; }
         }
 
+        public class SimpleClass2
+        {
+            public string Foo { get; set; }
+
+            public SimpleClass SimpleClass { get; set; }
+        }
+
         [Test]
         public void TestReferences()
         {
@@ -393,6 +400,14 @@ namespace Test
 
             Assert.AreNotEqual("foo", item2.Prop1);
             Assert.AreEqual("bar", item.Prop2);
+        }
+
+        [Test]
+        public void TestWithoutKeys()
+        {
+            this.ctx.WithoutRelations();
+
+            var a = this.ctx.Create<SimpleClass2>();
         }
     }
 }

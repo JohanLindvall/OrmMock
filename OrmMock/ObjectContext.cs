@@ -121,6 +121,14 @@ namespace OrmMock
             this.objectCount = 0;
         }
 
+        public ObjectContext WithoutRelations()
+        {
+            this.Relations.DefaultPrimaryKey = _ => new PropertyInfo[0];
+            this.Relations.DefaultForeignKey = (_, __) => new PropertyInfo[0];
+
+            return this;
+        }
+
         /// <summary>
         /// Registers a specific object type to be a singleton of a specific value
         /// </summary>
@@ -220,7 +228,7 @@ namespace OrmMock
         /// <returns>The created object.</returns>
         public T Create<T>()
         {
-            return (T)CreateObject(typeof(T), new List<object>());
+            return (T)this.Create(typeof(T));
         }
 
         /// <summary>
@@ -377,7 +385,17 @@ namespace OrmMock
                         continue;
                     }
 
-                    if (this.customization.TryGetPropertySetter(property, out var valueFunc))
+                    var valueFunc = this.customization.GetPropertyConstructor(property);
+                    if (valueFunc == null)
+                    {
+                        var localValueCreator = this.valueCreator.Get(property.PropertyType);
+                        if (localValueCreator != null)
+                        {
+                            valueFunc = _ => localValueCreator(property.Name);
+                        }
+                    }
+
+                    if (valueFunc != null)
                     {
                         propertyPlacement.Add(property, methods.Count);
                         var setterDelegate = Reflection.SetPropertyValueInvoker(property);
@@ -386,22 +404,6 @@ namespace OrmMock
                             if (!currentSingleton)
                             {
                                 setterDelegate(currentObject, valueFunc(this));
-                            }
-                        });
-
-                        continue;
-                    }
-
-                    var localValueCreator = this.GetValueCreator(property.PropertyType);
-                    if (localValueCreator != null)
-                    {
-                        propertyPlacement.Add(property, methods.Count);
-                        var setterDelegate = Reflection.SetPropertyValueInvoker(property);
-                        methods.Add((currentObject, _, currentSingleton) =>
-                        {
-                            if (!currentSingleton)
-                            {
-                                setterDelegate(currentObject, localValueCreator(property.Name));
                             }
                         });
                     }
@@ -422,10 +424,7 @@ namespace OrmMock
                         foreach (var property in referenceProperties)
                         {
                             var propertyType = property.PropertyType;
-                            if (!this.customization.TryGetLookbackCount(property, out var lookbackCount))
-                            {
-                                lookbackCount = DefaultLookback;
-                            }
+                            var lookbackCount = this.customization.GetLookbackCount(property, DefaultLookback);
 
                             if (propertyType.IsGenericType)
                             {
@@ -477,14 +476,11 @@ namespace OrmMock
                                                 return; // The current value is an already existing singleton. Do not change any of its values.
                                             }
 
-                                            if (!this.customization.TryGetIncludeCount(property, out int elementCount))
-                                            {
-                                                elementCount = currentSources.Count == 0 ? this.RootCollectionMembers : this.NonRootCollectionMembers;
-                                            }
+                                            var includeCount = this.customization.GetIncludeCount(property, currentSources.Count == 0 ? this.RootCollectionMembers : this.NonRootCollectionMembers);
 
                                             currentSources.Add(currentObject);
 
-                                            for (var i = 0; i < elementCount; ++i)
+                                            for (var i = 0; i < includeCount; ++i)
                                             {
                                                 collectionAdder(collection, CreateObject(elementType, currentSources));
                                             }
@@ -608,9 +604,11 @@ namespace OrmMock
         /// <returns></returns>
         private Func<string, object> GetValueCreator(Type t)
         {
-            if (this.customization.TryGetCustomConstructor(t, out var creator))
+            var constructor = this.customization.GetCustomConstructor(t);
+
+            if (constructor != null)
             {
-                return s => creator(this, s);
+                return s => constructor(this, s);
             }
 
             return this.valueCreator.Get(t);

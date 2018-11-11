@@ -56,36 +56,43 @@ namespace OrmMock
         /// Sets the type to be a singleton.
         /// </summary>
         /// <param name="singleton">The singleton value.</param>
-        public void With(T singleton)
+        /// <returns>The typed context.</returns>
+        public ForTypeContext<T> With(T singleton)
         {
             this.objectContext.Singleton(singleton);
+
+            return this;
         }
 
         /// <summary>
         /// Sets a type to a specific value
         /// </summary>
         /// <param name="creator">The function returning an object.</param>
-        /// <returns>The generator.</returns>
-        public void With(Func<T> creator)
+        /// <returns>The typed context.</returns>
+        public ForTypeContext<T> With(Func<T> creator)
         {
             this.With(_ => creator());
+
+            return this;
         }
 
         /// <summary>
         /// Sets a type to a specific value
         /// </summary>
         /// <param name="creator">The function returning an object.</param>
-        /// <returns>The generator.</returns>
-        public void With(Func<string, T> creator)
+        /// <returns>The typed context.</returns>
+        public ForTypeContext<T> With(Func<string, T> creator)
         {
             this.customization.SetLookbackCount(typeof(T), 0);
             this.customization.SetCustomConstructor(typeof(T), (_, s) => creator(s));
+
+            return this;
         }
 
         /// <summary>
         /// Registers the given type as a singleton.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The typed context.</returns>
         public ForTypeContext<T> RegisterSingleton()
         {
             this.customization.RegisterSingleton(typeof(T));
@@ -98,7 +105,7 @@ namespace OrmMock
         /// </summary>
         /// <param name="e">The expression to include.</param>
         /// <param name="count">The number of items to create. Default is 3.</param>
-        /// <returns>The generator.</returns>
+        /// <returns>The typed context.</returns>
         public ForTypeContext<T> Include(Expression<Func<T, object>> e, int count = 3)
         {
             return this.ForEach(e, pi => { HandleInclude(count, pi); });
@@ -148,6 +155,7 @@ namespace OrmMock
         public ForTypeContext<T> Without()
         {
             this.customization.Skip(typeof(T));
+
             return this;
         }
 
@@ -227,15 +235,7 @@ namespace OrmMock
         /// <param name="e">The list of expressions.</param>
         /// <param name="action">The action to apply.</param>
         /// <returns>The current context.</returns>
-        private ForTypeContext<T> ForEach<T2>(Expression<Func<T, T2>> e, Action<PropertyInfo> action)
-        {
-            foreach (var property in ExpressionUtility.GetPropertyInfo(e))
-            {
-                action(property);
-            }
-
-            return this;
-        }
+        private ForTypeContext<T> ForEach<T2>(Expression<Func<T, T2>> e, Action<PropertyInfo> action) => this.ForEach(ExpressionUtility.GetPropertyInfo(e), action);
 
         /// <summary>
         /// Performs the action for the given list of properties.
