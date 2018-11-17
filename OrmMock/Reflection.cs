@@ -18,8 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
-
 namespace OrmMock
 {
     using System;
@@ -38,7 +36,7 @@ namespace OrmMock
         /// </summary>
         /// <param name="t">The type of the object to create.</param>
         /// <returns>A function creating object of the given type.</returns>
-        public static Func<object> ParameterlessConstructorInvoker(Type t)
+        public static Func<object> Constructor(Type t)
         {
             var constructor = t.GetConstructor(Type.EmptyTypes);
 
@@ -57,25 +55,32 @@ namespace OrmMock
         /// </summary>
         /// <param name="propertyInfo">The property to set.</param>
         /// <returns></returns>
-        public static Action<object, object> SetPropertyValueInvoker(PropertyInfo propertyInfo)
+        public static Action<object, object> Setter(PropertyInfo propertyInfo)
         {
             var setPropertyDelegate = propertyInfo.DeclaringType.DelegateForSetPropertyValue(propertyInfo.Name);
 
             return (obj, value) => setPropertyDelegate(obj, value);
         }
 
-        public static IList<Action<object, object>> SetPropertyValueInvokers(IEnumerable<PropertyInfo> propertyInfos) => propertyInfos.Select(SetPropertyValueInvoker).ToList();
+        public static IList<Action<object, object>> Setters(IEnumerable<PropertyInfo> propertyInfos) => propertyInfos.Select(Setter).ToList();
 
-        public static Func<object, object> GetPropertyValueInvoker(PropertyInfo propertyInfo)
+        public static Func<object, object> Getter(PropertyInfo propertyInfo)
         {
             var getPropertyDelegate = propertyInfo.DeclaringType.DelegateForGetPropertyValue(propertyInfo.Name);
 
             return obj => getPropertyDelegate(obj);
         }
 
-        public static IList<Func<object, object>> GetPropertyValueInvokers(IEnumerable<PropertyInfo> propertyInfos) => propertyInfos.Select(GetPropertyValueInvoker).ToList();
+        public static IList<Func<object, object>> Getters(IEnumerable<PropertyInfo> propertyInfos) => propertyInfos.Select(Getter).ToList();
 
-        public static Func<object, object, object> CallMethodWithOneArgumentInvoker(Type t, Type argumentType, string method)
+        public static Func<object, object> Caller(Type t, string method)
+        {
+            var callMethodDelegate = t.DelegateForCallMethod(method, Type.EmptyTypes);
+
+            return obj => callMethodDelegate(obj, null);
+        }
+
+        public static Func<object, object, object> Caller(Type t, Type argumentType, string method)
         {
             var callMethodDelegate = t.DelegateForCallMethod(method, argumentType);
 

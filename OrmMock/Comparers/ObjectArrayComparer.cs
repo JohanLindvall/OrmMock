@@ -22,6 +22,9 @@ namespace OrmMock.Comparers
 {
     using System.Collections.Generic;
 
+    /// <summary>
+    /// Implements a comparer comparing the held array contents.
+    /// </summary>
     internal class ObjectArrayComparer : IEqualityComparer<object[]>
     {
         public bool Equals(object[] x, object[] y)

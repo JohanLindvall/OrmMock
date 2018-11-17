@@ -23,7 +23,7 @@ namespace OrmMock.Comparers
     using System.Collections.Generic;
     using System.Runtime.CompilerServices;
 
-    internal class ObjectEqualityComparer : IEqualityComparer<object>
+    internal class ReferenceEqualityComparer : IEqualityComparer<object>
     {
         bool IEqualityComparer<object>.Equals(object x, object y)
         {

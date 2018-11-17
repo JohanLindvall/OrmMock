@@ -180,7 +180,7 @@ namespace OrmMock
         {
             var result = new Dictionary<Type, Dictionary<object[], object>>();
 
-            var clones = new Dictionary<object, object>(new ObjectEqualityComparer());
+            var clones = new Dictionary<object, object>(new ReferenceEqualityComparer());
 
             // First pass create instances and handle value properties.
             foreach (var kvp in this.heldObjects)
@@ -318,7 +318,7 @@ namespace OrmMock
             {
                 if (visited == null)
                 {
-                    visited = new HashSet<object>(new ObjectEqualityComparer());
+                    visited = new HashSet<object>(new ReferenceEqualityComparer());
                 }
             }
 
