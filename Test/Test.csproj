@@ -50,6 +50,7 @@
   <ItemGroup>
     <Compile Include="ExpressionUtilityTest.cs" />
     <Compile Include="ForContextTest.cs" />
+    <Compile Include="MemDb2Test.cs" />
     <Compile Include="MemDbTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RelationsTest.cs" />

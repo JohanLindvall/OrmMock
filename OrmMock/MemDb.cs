@@ -83,7 +83,7 @@ namespace OrmMock
         /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <param name="expression">The expression defining the primary keys.</param>
-        public void RegisterKey<T>(Expression<Func<T, object>> expression) where T : class => this.relations.RegisterPrimaryKeys(expression);
+        public void RegisterKey<T>(Expression<Func<T, object>> expression) where T : class => this.relations.RegisterPrimaryKey(expression);
 
         public void RegisterAutoIncrement<T>(Expression<Func<T, object>> expression) where T : class
         {

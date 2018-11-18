@@ -60,14 +60,15 @@ namespace OrmMock
             }
         }
 
-        public void Remove(object o)
+        public bool Remove(object o)
         {
             var type = o.GetType();
             var keys = this.propertyAccessor.GetPrimaryKeys(o);
+            var result = false;
 
             var i = this.heldObjects.Count - 1;
 
-            while (i > 0)
+            while (i >= 0)
             {
                 var toCheck = this.heldObjects[i];
 
@@ -78,14 +79,17 @@ namespace OrmMock
                     if (keys.Equals(toCheckKeys))
                     {
                         this.heldObjects.RemoveAt(i);
+                        result = true;
                     }
                 }
 
                 --i;
             }
+
+            return result;
         }
 
-        public void Bind()
+        public void Commit()
         {
             var seenObjects = new HashSet<object>(this.heldObjects, new ReferenceEqualityComparer());
 
@@ -94,12 +98,24 @@ namespace OrmMock
                 foreach (var descendant in this.GetObjects(newObject, seenObjects))
                 {
                     this.heldObjects.Add(descendant);
+
+                    // Auto-increment for new objects.
+                    var properties = this.propertyAccessor.GetProperties(descendant.GetType());
+
+                    foreach (var property in properties)
+                    {
+                        if (this.autoIncrement.TryGetValue(property, out var value))
+                        {
+                            this.propertyAccessor.SetValue(descendant, property, Convert.ChangeType(++value, property.PropertyType));
+                            this.autoIncrement[property] = value;
+                        }
+                    }
                 }
             }
 
             this.newObjects.Clear();
 
-            var primaryKeyLookup = this.heldObjects.ToDictionary(heldObject => Tuple.Create(heldObject.GetType(), this.propertyAccessor.GetPrimaryKeys(heldObject)), heldObject => heldObject);
+            var primaryKeyLookup = Deferred(() => this.heldObjects.ToDictionary(heldObject => Tuple.Create(heldObject.GetType(), this.propertyAccessor.GetPrimaryKeys(heldObject)), heldObject => heldObject));
 
             var incomingObjectsLookup = new Dictionary<Tuple<Type, Type>, IList<object>>();
 
@@ -146,13 +162,14 @@ namespace OrmMock
 
                                 this.propertyAccessor.SetForeignKeys(currentObject, foreignObject.GetType(), primaryKeysOfForeignObject); // For 1:1 primary keys may change.
                             }
-                            else if (primaryKeyLookup.TryGetValue(Tuple.Create(propertyType, this.propertyAccessor.GetForeignKeys(currentObject, propertyType)), out foreignObject))
+                            else if (primaryKeyLookup().TryGetValue(Tuple.Create(propertyType, this.propertyAccessor.GetForeignKeys(currentObject, propertyType)), out foreignObject))
                             {
                                 this.propertyAccessor.SetValue(currentObject, property, foreignObject);
                             }
                             else
                             {
                                 // Object not found. Clear nullable foreign keys.
+                                this.propertyAccessor.SetValue(currentObject, property, null);
                                 this.propertyAccessor.ClearForeignKeys(currentObject, propertyType);
                             }
 
@@ -167,20 +184,15 @@ namespace OrmMock
 
                             if (foreignObject != null)
                             {
-                                incomingObjects.Add(foreignObject);
+                                incomingObjects.Add(currentObject);
                             }
-                        }
-                        else if (this.autoIncrement.TryGetValue(property, out var value))
-                        {
-                            this.propertyAccessor.SetValue(currentObject, property, Convert.ChangeType(++value, propertyType));
-                            this.autoIncrement[property] = value;
                         }
                     }
                 }
             }
         }
 
-        public IQueryable<T> GetQueryable<T>()
+        public IQueryable<T> Queryable<T>()
         {
             return this.heldObjects.Where(o => o.GetType() == typeof(T)).Select(o => (T)o).AsQueryable();
         }
@@ -191,6 +203,38 @@ namespace OrmMock
 
         public int Count<T>() => this.Count(typeof(T));
 
+        public T Get<T>(params object[] keys)
+        {
+            var kh = new KeyHolder(keys);
+
+            foreach (var heldObject in this.heldObjects)
+            {
+                if (heldObject.GetType() == typeof(T) && this.propertyAccessor.GetPrimaryKeys(heldObject).Equals(kh))
+                {
+                    return (T)heldObject;
+                }
+            }
+
+            return default(T);
+        }
+
+        private static Func<T> Deferred<T>(Func<T> creator)
+        {
+            bool initialized = false;
+            T result = default(T);
+
+            return () =>
+            {
+                if (!initialized)
+                {
+                    result = creator();
+                    initialized = true;
+                }
+
+                return result;
+            };
+        }
+
         private static bool FollowType(Type t)
         {
             return t.IsClass && !t.IsGenericType && Nullable.GetUnderlyingType(t) == null && t != typeof(string);
@@ -198,11 +242,23 @@ namespace OrmMock
 
         private static bool FollowCollectionType(Type t)
         {
-            return t.IsGenericType && typeof(ICollection<>).IsAssignableFrom(t.GetGenericTypeDefinition()) && FollowType(t.GetGenericArguments()[0]);
+            if (t.IsGenericType)
+            {
+                var args = t.GetGenericArguments();
+
+                return (typeof(ICollection<>).MakeGenericType(args).IsAssignableFrom(t)) && FollowType(args[0]);
+            }
+
+            return false;
         }
 
         private IEnumerable<object> GetObjects(object root, HashSet<object> seenObjects)
         {
+            if (root == null)
+            {
+                yield break;
+            }
+
             if (seenObjects.Add(root))
             {
                 yield return root;
@@ -227,7 +283,10 @@ namespace OrmMock
                     }
                     else if (FollowType(propertyType))
                     {
-                        yield return this.GetObjects(this.propertyAccessor.GetValue(root, property), seenObjects);
+                        foreach (var descendant in this.GetObjects(this.propertyAccessor.GetValue(root, property), seenObjects))
+                        {
+                            yield return descendant;
+                        }
                     }
                 }
             }

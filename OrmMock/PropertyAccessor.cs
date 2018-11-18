@@ -145,12 +145,12 @@ namespace OrmMock
 
                 keySetter = (local, keys) =>
                 {
-                    if (setters.Count != keys.Keys.Length)
+                    if (setters.Count != 0 && setters.Count != keys.Keys.Length)
                     {
                         throw new InvalidOperationException("Setters and keys must be of equal length.");
                     }
 
-                    for (var i = 0; i < keys.Keys.Length; ++i)
+                    for (var i = 0; i < setters.Count; ++i)
                     {
                         setters[i](o, keys.Keys[i]);
                     }

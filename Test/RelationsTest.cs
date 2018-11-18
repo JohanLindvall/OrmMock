@@ -64,7 +64,7 @@ namespace Test
         [Test]
         public void TestGetPrimaryKeys()
         {
-            this.relations.RegisterPrimaryKeys<TestClass2>(tc => new { tc.Id1, tc.Id2 });
+            this.relations.RegisterPrimaryKey<TestClass2>(tc => new { tc.Id1, tc.Id2 });
 
             var pk1 = this.relations.GetPrimaryKeys(typeof(TestClass1));
             var pk2 = this.relations.GetPrimaryKeys(typeof(TestClass2));
@@ -77,7 +77,7 @@ namespace Test
         [Test]
         public void TestGetForeignKeys()
         {
-            this.relations.RegisterPrimaryKeys<TestClass2>(tc => new { tc.Id1, tc.Id2 });
+            this.relations.RegisterPrimaryKey<TestClass2>(tc => new { tc.Id1, tc.Id2 });
             this.relations.RegisterForeignKeys<TestClass3, TestClass2, object>(tc => new { tc.TestClass2Id1, tc.TestClass2Id2 });
 
             var fk1 = this.relations.GetForeignKeys(typeof(TestClass3), typeof(TestClass1));
@@ -97,7 +97,7 @@ namespace Test
         [Test]
         public void Test11Relation()
         {
-            this.relations.RegisterPrimaryKeys<TestClass2>(tc => tc.Id1);
+            this.relations.RegisterPrimaryKey<TestClass2>(tc => tc.Id1);
             this.relations.Register11Relation<TestClass1, TestClass2>(tc => tc.Id, tc => tc.Id1);
 
             var fk1 = this.relations.GetForeignKeys(typeof(TestClass1), typeof(TestClass2));

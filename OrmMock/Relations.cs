@@ -72,7 +72,7 @@ namespace OrmMock
         /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <param name="expression">The expression defining the primary keys.</param>
-        public Relations RegisterPrimaryKeys<T>(Expression<Func<T, object>> expression)
+        public Relations RegisterPrimaryKey<T>(Expression<Func<T, object>> expression)
             where T : class
         {
             this.primaryKeys.Add(typeof(T), ExpressionUtility.GetPropertyInfo(expression));
@@ -89,7 +89,7 @@ namespace OrmMock
         /// <param name="expression">The expression defining the foreign keys.</param>
         public Relations RegisterForeignKeys<TThis, TForeign, TKey>(Expression<Func<TThis, TKey>> expression)
         {
-            return this.RegisterForeignKeyProperties<TThis, TForeign>(ExpressionUtility.GetPropertyInfo(expression));
+            return this.RegisterForeignKeys<TThis, TForeign>(ExpressionUtility.GetPropertyInfo(expression));
         }
 
         /// <summary>
@@ -98,11 +98,24 @@ namespace OrmMock
         /// <typeparam name="TThis">The type of the object.</typeparam>
         /// <typeparam name="TForeign">The type of the foreign object.</typeparam>
         /// <param name="keys">The foreign keys.</param>
-        public Relations RegisterForeignKeyProperties<TThis, TForeign>(PropertyInfo[] keys)
+        public Relations RegisterForeignKeys<TThis, TForeign>(PropertyInfo[] keys)
         {
             this.ValidateForeignKeys(typeof(TThis), typeof(TForeign), keys);
 
             this.foreignKeys.Add(new Tuple<Type, Type>(typeof(TThis), typeof(TForeign)), keys);
+
+            return this;
+        }
+
+        /// <summary>
+        /// Registers an empty set of foreign keys for the given relation.
+        /// </summary>
+        /// <typeparam name="TThis">The type of the object.</typeparam>
+        /// <typeparam name="TForeign">The type of the foreign object.</typeparam>
+        public Relations RegisterNullForeignKeys<TThis, TForeign>()
+        {
+            // Bypass validation of foreign keys and primary keys
+            this.foreignKeys.Add(new Tuple<Type, Type>(typeof(TThis), typeof(TForeign)), new PropertyInfo[0]);
 
             return this;
         }
