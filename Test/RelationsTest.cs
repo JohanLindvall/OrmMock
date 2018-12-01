@@ -24,7 +24,6 @@ namespace Test
 {
     using System;
     using NUnit.Framework;
-    using OrmMock;
 
     [TestFixture]
     public class RelationsTest

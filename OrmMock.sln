@@ -7,6 +7,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrmMock", "OrmMock\OrmMock.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "Test\Test.csproj", "{AE4E5A85-28D1-4A77-84E6-1B7DC186E478}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrmMock.EF6", "OrmMock.EF6\OrmMock.EF6.csproj", "{38C7A805-6FCF-4CF8-BA68-358219EAB800}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrmMock.EF6.Test", "OrmMock.EF6.Test\OrmMock.EF6.Test.csproj", "{FA28EBD0-A1CC-4313-B29D-103953B32874}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +25,14 @@ Global
 		{AE4E5A85-28D1-4A77-84E6-1B7DC186E478}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AE4E5A85-28D1-4A77-84E6-1B7DC186E478}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AE4E5A85-28D1-4A77-84E6-1B7DC186E478}.Release|Any CPU.Build.0 = Release|Any CPU
+		{38C7A805-6FCF-4CF8-BA68-358219EAB800}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{38C7A805-6FCF-4CF8-BA68-358219EAB800}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{38C7A805-6FCF-4CF8-BA68-358219EAB800}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{38C7A805-6FCF-4CF8-BA68-358219EAB800}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FA28EBD0-A1CC-4313-B29D-103953B32874}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA28EBD0-A1CC-4313-B29D-103953B32874}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA28EBD0-A1CC-4313-B29D-103953B32874}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA28EBD0-A1CC-4313-B29D-103953B32874}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -54,6 +54,14 @@ namespace OrmMock.MemDb
             this.newObjects.Add(o);
         }
 
+        public void AddMany(IEnumerable<object> objects)
+        {
+            foreach (var o in objects)
+            {
+                this.Add(o);
+            }
+        }
+
         public void RegisterAutoIncrement<T>(Expression<Func<T, object>> expression) where T : class
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(expression))
