@@ -18,7 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-namespace OrmMock
+using OrmMock.Shared;
+
+namespace OrmMock.DataGenerator
 {
     using System;
     using System.Collections.Generic;
@@ -28,7 +30,7 @@ namespace OrmMock
     /// <summary>
     /// Defines an object context containing the created object.
     /// </summary>
-    public class ObjectContext
+    public class DataGenerator
     {
         /// <summary>
         /// Holds the number of objects generated.
@@ -100,13 +102,13 @@ namespace OrmMock
         /// </summary>
         public Relations Relations { get; }
 
-        public ObjectContext()
+        public DataGenerator()
         {
             this.customization = new Customization();
             this.Relations = new Relations();
         }
 
-        private ObjectContext(Customization customization, Relations relations)
+        private DataGenerator(Customization customization, Relations relations)
         {
             this.customization = customization;
             this.Relations = relations;
@@ -121,7 +123,7 @@ namespace OrmMock
             this.objectCount = 0;
         }
 
-        public ObjectContext WithoutRelations()
+        public DataGenerator WithoutRelations()
         {
             this.Relations.DefaultPrimaryKey = _ => new PropertyInfo[0];
             this.Relations.DefaultForeignKey = (_, __) => new PropertyInfo[0];
@@ -135,7 +137,7 @@ namespace OrmMock
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <param name="value">The singleton value to register.</param>
         /// <returns>The generator.</returns>
-        public ObjectContext Singleton<T>(T value)
+        public DataGenerator Singleton<T>(T value)
         {
             this.singletons.Add(typeof(T), value);
 
@@ -158,7 +160,7 @@ namespace OrmMock
         /// <returns>A typed build context.</returns>
         public ForTypeContext<T> Build<T>()
         {
-            return new ObjectContext(new Customization(this.customization), this.Relations).For<T>();
+            return new DataGenerator(new Customization(this.customization), this.Relations).For<T>();
         }
 
         /// <summary>

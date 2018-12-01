@@ -18,38 +18,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-namespace OrmMock.Comparers
+namespace OrmMock.Shared.Comparers
 {
+
     using System.Collections.Generic;
+    using System.Runtime.CompilerServices;
 
     /// <summary>
-    /// Implements a comparer comparing the held array contents.
+    /// Compares objects using reference equality.
     /// </summary>
-    internal class ObjectArrayComparer : IEqualityComparer<object[]>
+    public class ReferenceEqualityComparer : IEqualityComparer<object>
     {
-        public bool Equals(object[] x, object[] y)
+        /// <inheritdoc />
+        bool IEqualityComparer<object>.Equals(object x, object y)
         {
-            for (var i = 0; i < x.Length; ++i)
-            {
-                if (!x[i].Equals(y[i])) return false;
-            }
-
-            return true;
+            return object.ReferenceEquals(x, y);
         }
 
-        public int GetHashCode(object[] obj)
+        /// <inheritdoc />
+        int IEqualityComparer<object>.GetHashCode(object obj)
         {
-            unchecked
-            {
-                int hash = 17;
-
-                foreach (var singleObj in obj)
-                {
-                    hash = hash * 31 + singleObj.GetHashCode();
-                }
-
-                return hash;
-            }
+            return RuntimeHelpers.GetHashCode(obj);
         }
     }
 }

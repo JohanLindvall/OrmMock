@@ -1,10 +1,9 @@
-﻿
-using System;
-
-namespace Test
+﻿namespace Test
 {
+    using System;
+    using OrmMock.DataGenerator;
+
     using NUnit.Framework;
-    using OrmMock;
 
     [TestFixture]
     class ValueCreatorTest

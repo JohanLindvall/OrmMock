@@ -46,24 +46,24 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Comparers\ObjectArrayComparer.cs" />
-    <Compile Include="Comparers\ReferenceEqualityComparer.cs" />
-    <Compile Include="ExpressionUtility.cs" />
-    <Compile Include="ForTypeContext`.cs" />
-    <Compile Include="KeyHolder.cs" />
-    <Compile Include="MemDb.cs" />
-    <Compile Include="MemDb2.cs" />
-    <Compile Include="PropertyAccessor.cs" />
-    <Compile Include="ObjectContext.cs" />
+    <Compile Include="Shared\Comparers\ObjectArrayComparer.cs" />
+    <Compile Include="Shared\Comparers\ReferenceEqualityComparer.cs" />
+    <Compile Include="Shared\ExpressionUtility.cs" />
+    <Compile Include="DataGenerator\ForTypeContext`.cs" />
+    <Compile Include="Shared\KeyHolder.cs" />
+    <Compile Include="MemDb\MemDb.cs" />
+    <Compile Include="Shared\PropertyAccessor.cs" />
+    <Compile Include="DataGenerator\DataGenerator.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Reflection.cs" />
-    <Compile Include="Relations.cs" />
-    <Compile Include="Customization.cs" />
-    <Compile Include="ValueCreator.cs" />
+    <Compile Include="Shared\Reflection.cs" />
+    <Compile Include="Shared\Relations.cs" />
+    <Compile Include="DataGenerator\Customization.cs" />
+    <Compile Include="DataGenerator\ValueCreator.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="OrmMock.nuspec" />
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

@@ -18,21 +18,31 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-namespace OrmMock.Comparers
+namespace OrmMock.Shared
 {
-    using System.Collections.Generic;
-    using System.Runtime.CompilerServices;
+    using Comparers;
 
-    internal class ReferenceEqualityComparer : IEqualityComparer<object>
+    public class KeyHolder
     {
-        bool IEqualityComparer<object>.Equals(object x, object y)
+        public KeyHolder(object[] keys)
         {
-            return object.ReferenceEquals(x, y);
+            this.Keys = keys;
         }
 
-        int IEqualityComparer<object>.GetHashCode(object obj)
+        public object[] Keys { get; }
+
+        public bool Equals(KeyHolder other) => ObjectArrayComparer.Default.Equals(this.Keys, other.Keys);
+
+        public override bool Equals(object other)
         {
-            return RuntimeHelpers.GetHashCode(obj);
+            if (other is KeyHolder k)
+            {
+                return this.Equals(k);
+            }
+
+            return false;
         }
+
+        public override int GetHashCode() => ObjectArrayComparer.Default.GetHashCode(this.Keys);
     }
 }

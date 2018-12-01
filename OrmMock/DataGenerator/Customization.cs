@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-namespace OrmMock
+namespace OrmMock.DataGenerator
 {
     using System;
     using System.Collections.Generic;
@@ -49,7 +49,6 @@ namespace OrmMock
         /// </summary>
         public Customization() : this(null)
         {
-
         }
 
         /// <summary>
@@ -146,12 +145,12 @@ namespace OrmMock
             this.GetOrAdd(property).LookbackCount = lookbackCount;
         }
 
-        public void SetPropertySetter(PropertyInfo property, Func<ObjectContext, object> setter)
+        public void SetPropertySetter(PropertyInfo property, Func<DataGenerator, object> setter)
         {
             this.GetOrAdd(property).CustomValue = setter;
         }
 
-        public Func<ObjectContext, object> GetPropertyConstructor(PropertyInfo pi)
+        public Func<DataGenerator, object> GetPropertyConstructor(PropertyInfo pi)
         {
             var setter = this.Get(pi)?.CustomValue;
 
@@ -168,12 +167,12 @@ namespace OrmMock
             return setter ?? this.ancestor?.GetPropertyConstructor(pi);
         }
 
-        public void SetCustomConstructor(Type type, Func<ObjectContext, string, object> constructor)
+        public void SetCustomConstructor(Type type, Func<DataGenerator, string, object> constructor)
         {
             this.GetOrAdd(type).Constructor = constructor;
         }
 
-        public Func<ObjectContext, string, object> GetCustomConstructor(Type type)
+        public Func<DataGenerator, string, object> GetCustomConstructor(Type type)
         {
             return this.Get(type)?.Constructor ?? this.ancestor?.GetCustomConstructor(type);
         }
@@ -232,7 +231,7 @@ namespace OrmMock
 
             public int? LookbackCount { get; set; }
 
-            public Func<ObjectContext, string, object> Constructor { get; set; }
+            public Func<DataGenerator, string, object> Constructor { get; set; }
         }
 
         private class PropertyCustomization
@@ -243,7 +242,7 @@ namespace OrmMock
 
             public int? LookbackCount { get; set; }
 
-            public Func<ObjectContext, object> CustomValue { get; set; }
+            public Func<DataGenerator, object> CustomValue { get; set; }
         }
     }
 }

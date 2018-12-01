@@ -18,6 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+using System.Reflection;
+using OrmMock.MemDb;
+
 namespace Test
 {
     using System;
@@ -92,35 +95,47 @@ namespace Test
             public int Auto { get; set; }
         }
 
+        private MemDb db;
+
+        [SetUp]
+        public void Setup()
+        {
+            this.db = new MemDb();
+            this.db.Relations.RegisterNullForeignKeys<TestClass4, TestClass3>();
+            this.db.Relations.RegisterNullForeignKeys<TestClass3, TestClass4>();
+            this.db.Relations.RegisterNullForeignKeys<TestClass3, TestClass3>();
+            this.db.Relations.RegisterNullForeignKeys<TestClass4, TestClass4>();
+        }
+
         [Test]
         public void TestAdd()
         {
-            var db = new MemDb();
             var obj = new TestClass1 { Id = Guid.NewGuid() };
             db.Add(obj);
+            db.Commit();
             Assert.AreEqual(1, db.Count<TestClass1>());
         }
 
         [Test]
         public void TestAddTwiceSameKey()
         {
-            var db = new MemDb();
             var obj = new TestClass1 { Id = Guid.NewGuid() };
             db.Add(obj);
             obj = new TestClass1 { Id = obj.Id };
-            Assert.Throws<ArgumentException>(() => db.Add(obj));
-            Assert.AreEqual(1, db.Count<TestClass1>());
+            db.Add(obj);
+            db.Commit();
         }
 
         [Test]
         public void TestCount()
         {
-            var db = new MemDb();
             db.Add(new TestClass1 { Id = Guid.NewGuid() });
             db.Add(new TestClass1 { Id = Guid.NewGuid() });
             db.Add(new TestClass1B { Id = Guid.NewGuid() });
             db.Add(new TestClass1B { Id = Guid.NewGuid() });
             db.Add(new TestClass1B { Id = Guid.NewGuid() });
+
+            db.Commit();
 
             Assert.AreEqual(2, db.Count<TestClass1>());
             Assert.AreEqual(3, db.Count<TestClass1B>());
@@ -130,32 +145,29 @@ namespace Test
         [Test]
         public void TestAddUnknownKey()
         {
-            var db = new MemDb();
-            var obj = new TestClass1 { Id = Guid.NewGuid() };
-            Assert.Throws<InvalidOperationException>(() => db.Add(new TestClass2()));
-            Assert.AreEqual(0, db.Count());
+            db.Add(new TestClass2());
+            db.Commit();
+            Assert.AreEqual(1, db.Count());
         }
 
         [Test]
         public void TestRegisterKey()
         {
-            var db = new MemDb();
-            db.RegisterKey<TestClass2>(i => i.Key1);
+            db.Relations.RegisterPrimaryKey<TestClass2>(i => i.Key1);
         }
 
         [Test]
         public void TestRegisterKeyFail()
         {
-            var db = new MemDb();
-            Assert.Throws<InvalidOperationException>(() => db.RegisterKey<TestClass2>(i => i.Key1 + 1));
+            Assert.Throws<InvalidOperationException>(() => db.Relations.RegisterPrimaryKey<TestClass2>(i => i.Key1 + 1));
         }
 
         [Test]
         public void TestRegisterKeyGet()
         {
-            var db = new MemDb();
-            db.RegisterKey<TestClass2>(i => i.Key1);
+            db.Relations.RegisterPrimaryKey<TestClass2>(i => i.Key1);
             db.Add(new TestClass2 { Key1 = 23, Key2 = 45 });
+            db.Commit();
             var fetched = db.Get<TestClass2>(23);
             Assert.AreEqual(23, fetched.Key1);
             Assert.AreEqual(45, fetched.Key2);
@@ -164,23 +176,21 @@ namespace Test
         [Test]
         public void TestRegisterKeyComposite()
         {
-            var db = new MemDb();
-            db.RegisterKey<TestClass2>(i => new { i.Key2, i.Key1 });
+            db.Relations.RegisterPrimaryKey<TestClass2>(i => new { i.Key2, i.Key1 });
         }
 
         [Test]
         public void TestRegisterKeyCompositeFail()
         {
-            var db = new MemDb();
-            Assert.Throws<InvalidOperationException>(() => db.RegisterKey<TestClass2>(i => new { foo = i.Key1 + 1 }));
+            Assert.Throws<InvalidOperationException>(() => db.Relations.RegisterPrimaryKey<TestClass2>(i => new { foo = i.Key1 + 1 }));
         }
 
         [Test]
         public void TestRegisterKeyGetComposite()
         {
-            var db = new MemDb();
-            db.RegisterKey<TestClass2>(i => new { i.Key2, i.Key1 });
+            db.Relations.RegisterPrimaryKey<TestClass2>(i => new { i.Key2, i.Key1 });
             db.Add(new TestClass2 { Key1 = 23, Key2 = 45 });
+            db.Commit();
             var fetched = db.Get<TestClass2>(45, 23);
             Assert.AreEqual(23, fetched.Key1);
             Assert.AreEqual(45, fetched.Key2);
@@ -189,9 +199,9 @@ namespace Test
         [Test]
         public void TestRegisterKeyGetCompositeFail()
         {
-            var db = new MemDb();
-            db.RegisterKey<TestClass2>(i => new { i.Key2, i.Key1 });
+            db.Relations.RegisterPrimaryKey<TestClass2>(i => new { i.Key2, i.Key1 });
             db.Add(new TestClass2 { Key1 = 23, Key2 = 45 });
+            db.Commit();
             var fetched = db.Get<TestClass2>(23, 45);
             Assert.IsNull(fetched);
         }
@@ -199,9 +209,9 @@ namespace Test
         [Test]
         public void TestGet()
         {
-            var db = new MemDb();
             var stored = new TestClass1 { Id = Guid.NewGuid() };
             db.Add(stored);
+            db.Commit();
             var fetched = db.Get<TestClass1>(stored.Id);
             Assert.AreSame(stored, fetched);
         }
@@ -209,25 +219,24 @@ namespace Test
         [Test]
         public void TestQueryable()
         {
-            var db = new MemDb();
             var stored = new TestClass1 { Id = Guid.NewGuid() };
             db.Add(stored);
+            db.Commit();
             db.Queryable<TestClass1>().Single(s => s.Id == stored.Id);
         }
 
         [Test]
         public void TestQueryableEmpty()
         {
-            var db = new MemDb();
             Assert.AreEqual(0, db.Queryable<TestClass1>().Count());
         }
 
         [Test]
         public void TestRemove()
         {
-            var db = new MemDb();
             var stored = new TestClass1 { Id = Guid.NewGuid() };
             db.Add(stored);
+            db.Commit();
             var remove = new TestClass1 { Id = stored.Id };
             Assert.IsTrue(db.Remove(remove));
             Assert.AreEqual(0, db.Count());
@@ -236,14 +245,12 @@ namespace Test
         [Test]
         public void TestRemoveMissing()
         {
-            var db = new MemDb();
             Assert.IsFalse(db.Remove(new TestClass1 { Id = Guid.NewGuid() }));
         }
 
         [Test]
         public void TestAddChildren()
         {
-            var db = new MemDb();
             var stored = new TestClass4
             {
                 Id = 1,
@@ -258,6 +265,7 @@ namespace Test
             });
 
             db.Add(stored);
+            db.Commit();
 
             Assert.IsNotNull(db.Get<TestClass4>(1));
             Assert.IsNotNull(db.Get<TestClass3>(2));
@@ -265,29 +273,8 @@ namespace Test
         }
 
         [Test]
-        public void TestAddChildrenWithSameKey()
-        {
-            var db = new MemDb();
-            var stored = new TestClass4
-            {
-                Id = 1,
-            };
-            stored.List.Add(new TestClass3
-            {
-                Id = 2
-            });
-            stored.List.Add(new TestClass3
-            {
-                Id = 2
-            });
-
-            Assert.Throws<ArgumentException>(() => db.Add(stored));
-        }
-
-        [Test]
         public void TestAddChildrenTwice()
         {
-            var db = new MemDb();
             var stored = new TestClass4
             {
                 Id = 1,
@@ -297,6 +284,7 @@ namespace Test
             stored.List.Add(added);
 
             db.Add(stored);
+            db.Commit();
 
             Assert.IsNotNull(db.Get<TestClass4>(1));
             Assert.IsNotNull(db.Get<TestClass3>(2));
@@ -306,7 +294,6 @@ namespace Test
         [Test]
         public void TestAddReference()
         {
-            var db = new MemDb();
             var stored = new TestClass4
             {
                 Id = 1,
@@ -321,6 +308,7 @@ namespace Test
             };
 
             db.Add(stored);
+            db.Commit();
 
             Assert.IsNotNull(db.Get<TestClass4>(1));
             Assert.IsNotNull(db.Get<TestClass3>(2));
@@ -329,66 +317,8 @@ namespace Test
         }
 
         [Test]
-        public void TestAddFilter()
-        {
-            var db = new MemDb { IncludeFilter = type => type == typeof(TestClass4) };
-            var stored = new TestClass4
-            {
-                Id = 1,
-                Ref = new TestClass3
-                {
-                    Id = 2,
-                    Ref2 = new TestClass4
-                    {
-                        Id = 3
-                    }
-                }
-            };
-
-            db.Add(stored);
-
-            Assert.IsNotNull(db.Get<TestClass4>(1));
-            Assert.AreEqual(1, db.Count());
-        }
-
-        [Test]
-        public void TestClone()
-        {
-            var db = new MemDb();
-            var stored = new TestClass4
-            {
-                Id = 1,
-                Ref = new TestClass3
-                {
-                    Id = 2,
-                    Ref2 = new TestClass4
-                    {
-                        Id = 3
-                    }
-                },
-                List = { new TestClass3 { Id = 4 } }
-            };
-
-            db.Add(stored);
-
-            var clone = db.Clone();
-
-            stored.Id = 10;
-            stored.Ref.Id = 11;
-            stored.Ref.Ref2.Id = 12;
-            stored.List[0].Id = 13;
-
-            Assert.IsNotNull(clone.Get<TestClass4>(1));
-            Assert.IsNotNull(clone.Get<TestClass3>(2));
-            Assert.IsNotNull(clone.Get<TestClass4>(3));
-            Assert.IsNotNull(clone.Get<TestClass3>(4));
-            Assert.AreEqual(4, clone.Count());
-        }
-
-        [Test]
         public void TestAutoIncrement()
         {
-            var db = new MemDb();
             db.RegisterAutoIncrement<TestClass5>(i => i.Auto);
             db.Add(new TestClass5
             {
@@ -398,6 +328,7 @@ namespace Test
             {
                 Id = 1234
             });
+            db.Commit();
 
             var s1 = db.Get<TestClass5>((long)123);
             var s2 = db.Get<TestClass5>((long)1234);

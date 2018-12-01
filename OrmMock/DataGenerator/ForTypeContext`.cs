@@ -18,12 +18,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-namespace OrmMock
+using OrmMock.Shared;
+
+namespace OrmMock.DataGenerator
 {
     using System;
     using System.Collections.Generic;
-    using System.Reflection;
     using System.Linq.Expressions;
+    using System.Reflection;
 
     /// <summary>
     /// Implements a for-type context, where type-specific information is set and used.
@@ -34,7 +36,7 @@ namespace OrmMock
         /// <summary>
         /// Holds the object context.
         /// </summary>
-        private readonly ObjectContext objectContext;
+        private readonly DataGenerator objectContext;
 
         /// <summary>
         /// Holds the customization data.
@@ -46,7 +48,7 @@ namespace OrmMock
         /// </summary>
         /// <param name="objectContext">The object context.</param>
         /// <param name="customization">The customization data.</param>
-        public ForTypeContext(ObjectContext objectContext, Customization customization)
+        public ForTypeContext(DataGenerator objectContext, Customization customization)
         {
             this.objectContext = objectContext;
             this.customization = customization;
@@ -139,7 +141,7 @@ namespace OrmMock
         /// <param name="e">The property expression.</param>
         /// <param name="value">The value generator.</param>
         /// <returns>The generator.</returns>
-        public ForTypeContext<T> With<T2>(Expression<Func<T, T2>> e, Func<ObjectContext, T2> value)
+        public ForTypeContext<T> With<T2>(Expression<Func<T, T2>> e, Func<DataGenerator, T2> value)
         {
             return this.ForEach(e, pi =>
             {

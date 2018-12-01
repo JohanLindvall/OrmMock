@@ -18,7 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-namespace OrmMock
+
+using OrmMock.Shared;
+using OrmMock.Shared.Comparers;
+
+namespace OrmMock.MemDb
 {
     using System;
     using System.Collections;
@@ -27,9 +31,7 @@ namespace OrmMock
     using System.Linq.Expressions;
     using System.Reflection;
 
-    using Comparers;
-
-    public class MemDb2
+    public class MemDb
     {
         public Relations Relations { get; }
 
@@ -41,7 +43,7 @@ namespace OrmMock
 
         private readonly Dictionary<PropertyInfo, long> autoIncrement = new Dictionary<PropertyInfo, long>();
 
-        public MemDb2()
+        public MemDb()
         {
             this.Relations = new Relations();
             this.propertyAccessor = new PropertyAccessor(this.Relations);
@@ -91,30 +93,13 @@ namespace OrmMock
 
         public void Commit()
         {
-            var seenObjects = new HashSet<object>(this.heldObjects, new ReferenceEqualityComparer());
+            var seenObjects = this.DiscoverNewObjects();
 
-            foreach (var newObject in this.newObjects)
-            {
-                foreach (var descendant in this.GetObjects(newObject, seenObjects))
-                {
-                    this.heldObjects.Add(descendant);
+            this.UpdateObjectRelations(seenObjects);
+        }
 
-                    // Auto-increment for new objects.
-                    var properties = this.propertyAccessor.GetProperties(descendant.GetType());
-
-                    foreach (var property in properties)
-                    {
-                        if (this.autoIncrement.TryGetValue(property, out var value))
-                        {
-                            this.propertyAccessor.SetValue(descendant, property, Convert.ChangeType(++value, property.PropertyType));
-                            this.autoIncrement[property] = value;
-                        }
-                    }
-                }
-            }
-
-            this.newObjects.Clear();
-
+        private void UpdateObjectRelations(HashSet<object> seenObjects)
+        {
             var primaryKeyLookup = Deferred(() => this.heldObjects.ToDictionary(heldObject => Tuple.Create(heldObject.GetType(), this.propertyAccessor.GetPrimaryKeys(heldObject)), heldObject => heldObject));
 
             var incomingObjectsLookup = new Dictionary<Tuple<Type, Type>, IList<object>>();
@@ -190,6 +175,35 @@ namespace OrmMock
                     }
                 }
             }
+        }
+
+        private HashSet<object> DiscoverNewObjects()
+        {
+            var seenObjects = new HashSet<object>(this.heldObjects, new ReferenceEqualityComparer());
+
+            foreach (var newObject in this.newObjects)
+            {
+                foreach (var descendant in this.GetObjects(newObject, seenObjects))
+                {
+                    this.heldObjects.Add(descendant);
+
+                    // Auto-increment for new objects.
+                    var properties = this.propertyAccessor.GetProperties(descendant.GetType());
+
+                    foreach (var property in properties)
+                    {
+                        if (this.autoIncrement.TryGetValue(property, out var value))
+                        {
+                            this.propertyAccessor.SetValue(descendant, property, Convert.ChangeType(++value, property.PropertyType));
+                            this.autoIncrement[property] = value;
+                        }
+                    }
+                }
+            }
+
+            this.newObjects.Clear();
+
+            return seenObjects;
         }
 
         public IQueryable<T> Queryable<T>()
