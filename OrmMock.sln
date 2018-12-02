@@ -5,7 +5,7 @@ VisualStudioVersion = 15.0.27004.2009
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrmMock", "OrmMock\OrmMock.csproj", "{466CDB2E-03A6-4011-8A24-D8886828FC53}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "Test\Test.csproj", "{AE4E5A85-28D1-4A77-84E6-1B7DC186E478}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrmMock.Test", "OrmMock.Test\OrmMock.Test.csproj", "{AE4E5A85-28D1-4A77-84E6-1B7DC186E478}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrmMock.EF6", "OrmMock.EF6\OrmMock.EF6.csproj", "{38C7A805-6FCF-4CF8-BA68-358219EAB800}"
 EndProject
