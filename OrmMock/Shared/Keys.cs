@@ -18,25 +18,48 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-namespace OrmMock.EF6
+namespace OrmMock.Shared
 {
-    using MemDb;
+    using Comparers;
 
     /// <summary>
-    /// Defines extension methods for MemDb.
+    /// Defines a class for holding and comparing object keys.
     /// </summary>
-    public static class MemDbExtensions
+    public class Keys
     {
         /// <summary>
-        /// Creates a MemDbSet from the MemDb instance.
+        /// Initializes a new instance of the KeyHolder class.
         /// </summary>
-        /// <typeparam name="T">The type of the objects held by the set.</typeparam>
-        /// <param name="memDb">The memory DB instance.</param>
-        /// <returns>A MemDbSet.</returns>
-        public static MemDbSet<T> DbSet<T>(this IMemDb memDb)
-        where T : class
+        /// <param name="keys">The array of object keys.</param>
+        public Keys(params object[] keys)
         {
-            return new MemDbSet<T>(memDb);
+            this.Data = keys;
         }
+
+        /// <summary>
+        /// Gets the underlying key data.
+        /// </summary>
+        public object[] Data { get; }
+
+        /// <summary>
+        /// Implements object equality.
+        /// </summary>
+        /// <param name="other">The other instance.</param>
+        /// <returns>Tru if the objects are equal, false otherwise.</returns>
+        public bool Equals(Keys other) => ObjectArrayComparer.Default.Equals(this.Data, other.Data);
+
+        ///  <inheritdoc />
+        public override bool Equals(object other)
+        {
+            if (other is Keys k)
+            {
+                return this.Equals(k);
+            }
+
+            return false;
+        }
+
+        ///  <inheritdoc />
+        public override int GetHashCode() => ObjectArrayComparer.Default.GetHashCode(this.Data);
     }
 }

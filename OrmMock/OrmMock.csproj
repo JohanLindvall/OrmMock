@@ -50,9 +50,10 @@
     <Compile Include="MemDb\IMemDbCustomization.cs" />
     <Compile Include="Shared\Comparers\ObjectArrayComparer.cs" />
     <Compile Include="Shared\Comparers\ReferenceEqualityComparer.cs" />
+    <Compile Include="Shared\CachedFunc.cs" />
     <Compile Include="Shared\ExpressionUtility.cs" />
     <Compile Include="DataGenerator\ForTypeContext`.cs" />
-    <Compile Include="Shared\KeyHolder.cs" />
+    <Compile Include="Shared\Keys.cs" />
     <Compile Include="MemDb\MemDb.cs" />
     <Compile Include="Shared\PropertyAccessor.cs" />
     <Compile Include="DataGenerator\DataGenerator.cs" />

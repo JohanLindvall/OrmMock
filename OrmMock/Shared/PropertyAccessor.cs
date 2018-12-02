@@ -35,11 +35,11 @@ namespace OrmMock.Shared
 
         private readonly Dictionary<PropertyInfo, Action<object, object>> setterCache = new Dictionary<PropertyInfo, Action<object, object>>();
 
-        private readonly Dictionary<Type, Func<object, KeyHolder>> keyGetterCache = new Dictionary<Type, Func<object, KeyHolder>>();
+        private readonly Dictionary<Type, Func<object, Keys>> keyGetterCache = new Dictionary<Type, Func<object, Keys>>();
 
-        private readonly Dictionary<Tuple<Type, Type>, Func<object, KeyHolder>> foreignKeyGetterCache = new Dictionary<Tuple<Type, Type>, Func<object, KeyHolder>>();
+        private readonly Dictionary<Tuple<Type, Type>, Func<object, Keys>> foreignKeyGetterCache = new Dictionary<Tuple<Type, Type>, Func<object, Keys>>();
 
-        private readonly Dictionary<Tuple<Type, Type>, Action<object, KeyHolder>> foreignKeySetterCache = new Dictionary<Tuple<Type, Type>, Action<object, KeyHolder>>();
+        private readonly Dictionary<Tuple<Type, Type>, Action<object, Keys>> foreignKeySetterCache = new Dictionary<Tuple<Type, Type>, Action<object, Keys>>();
 
         private readonly Dictionary<Tuple<Type, Type>, Action<object>> foreignKeyClearerCache = new Dictionary<Tuple<Type, Type>, Action<object>>();
 
@@ -116,7 +116,7 @@ namespace OrmMock.Shared
             setter(o, value);
         }
 
-        public KeyHolder GetPrimaryKeys(object o)
+        public Keys GetPrimaryKeys(object o)
         {
             var t = o.GetType();
 
@@ -124,7 +124,7 @@ namespace OrmMock.Shared
             {
                 var getters = Reflection.Getters(this.relations.GetPrimaryKeys(t));
 
-                keyGetter = local => new KeyHolder(getters.Select(g => g(local)).ToArray());
+                keyGetter = local => new Keys(getters.Select(g => g(local)).ToArray());
 
                 this.keyGetterCache.Add(t, keyGetter);
             }
@@ -132,7 +132,7 @@ namespace OrmMock.Shared
             return keyGetter(o);
         }
 
-        public KeyHolder GetForeignKeys(object o, Type foreignType)
+        public Keys GetForeignKeys(object o, Type foreignType)
         {
             var thisType = o.GetType();
 
@@ -142,7 +142,7 @@ namespace OrmMock.Shared
             {
                 var getters = Reflection.Getters(this.relations.GetForeignKeys(thisType, foreignType));
 
-                keyGetter = local => new KeyHolder(getters.Select(g => g(local)).ToArray());
+                keyGetter = local => new Keys(getters.Select(g => g(local)).ToArray());
 
                 this.foreignKeyGetterCache.Add(key, keyGetter);
             }
@@ -150,7 +150,7 @@ namespace OrmMock.Shared
             return keyGetter(o);
         }
 
-        public void SetForeignKeys(object o, Type foreignType, KeyHolder foreignKeys)
+        public void SetForeignKeys(object o, Type foreignType, Keys foreignKeys)
         {
             var thisType = o.GetType();
 
@@ -162,14 +162,14 @@ namespace OrmMock.Shared
 
                 keySetter = (local, keys) =>
                 {
-                    if (setters.Count != 0 && setters.Count != keys.Keys.Length)
+                    if (setters.Count != 0 && setters.Count != keys.Data.Length)
                     {
                         throw new InvalidOperationException("Setters and keys must be of equal length.");
                     }
 
                     for (var i = 0; i < setters.Count; ++i)
                     {
-                        setters[i](o, keys.Keys[i]);
+                        setters[i](o, keys.Data[i]);
                     }
                 };
 

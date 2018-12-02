@@ -48,11 +48,12 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ExpressionUtilityTest.cs" />
+    <Compile Include="Shared\CachedFuncTest.cs" />
+    <Compile Include="Shared\ExpressionUtilityTest.cs" />
     <Compile Include="ForContextTest.cs" />
     <Compile Include="MemDbTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="RelationsTest.cs" />
+    <Compile Include="Shared\RelationsTest.cs" />
     <Compile Include="ValueCreatorTest.cs" />
   </ItemGroup>
   <ItemGroup>

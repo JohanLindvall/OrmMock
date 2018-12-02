@@ -167,7 +167,7 @@ namespace Test
             db.Relations.RegisterPrimaryKey<TestClass2>(i => i.Key1);
             db.Add(new TestClass2 { Key1 = 23, Key2 = 45 });
             db.Commit();
-            var fetched = db.Get<TestClass2>(new KeyHolder(23));
+            var fetched = db.Get<TestClass2>(new Keys(23));
             Assert.AreEqual(23, fetched.Key1);
             Assert.AreEqual(45, fetched.Key2);
         }
@@ -190,7 +190,7 @@ namespace Test
             db.Relations.RegisterPrimaryKey<TestClass2>(i => new { i.Key2, i.Key1 });
             db.Add(new TestClass2 { Key1 = 23, Key2 = 45 });
             db.Commit();
-            var fetched = db.Get<TestClass2>(new KeyHolder(45, 23));
+            var fetched = db.Get<TestClass2>(new Keys(45, 23));
             Assert.AreEqual(23, fetched.Key1);
             Assert.AreEqual(45, fetched.Key2);
         }
@@ -201,7 +201,7 @@ namespace Test
             db.Relations.RegisterPrimaryKey<TestClass2>(i => new { i.Key2, i.Key1 });
             db.Add(new TestClass2 { Key1 = 23, Key2 = 45 });
             db.Commit();
-            var fetched = db.Get<TestClass2>(new KeyHolder(23, 45));
+            var fetched = db.Get<TestClass2>(new Keys(23, 45));
             Assert.IsNull(fetched);
         }
 
@@ -211,7 +211,7 @@ namespace Test
             var stored = new TestClass1 { Id = Guid.NewGuid() };
             db.Add(stored);
             db.Commit();
-            var fetched = db.Get<TestClass1>(new KeyHolder(stored.Id));
+            var fetched = db.Get<TestClass1>(new Keys(stored.Id));
             Assert.AreSame(stored, fetched);
         }
 
@@ -266,9 +266,9 @@ namespace Test
             db.Add(stored);
             db.Commit();
 
-            Assert.IsNotNull(db.Get<TestClass4>(new KeyHolder(1)));
-            Assert.IsNotNull(db.Get<TestClass3>(new KeyHolder(2)));
-            Assert.IsNotNull(db.Get<TestClass4>(new KeyHolder(3)));
+            Assert.IsNotNull(db.Get<TestClass4>(new Keys(1)));
+            Assert.IsNotNull(db.Get<TestClass3>(new Keys(2)));
+            Assert.IsNotNull(db.Get<TestClass4>(new Keys(3)));
         }
 
         [Test]
@@ -285,8 +285,8 @@ namespace Test
             db.Add(stored);
             db.Commit();
 
-            Assert.IsNotNull(db.Get<TestClass4>(new KeyHolder(1)));
-            Assert.IsNotNull(db.Get<TestClass3>(new KeyHolder(2)));
+            Assert.IsNotNull(db.Get<TestClass4>(new Keys(1)));
+            Assert.IsNotNull(db.Get<TestClass3>(new Keys(2)));
             Assert.AreEqual(2, db.Count());
         }
 
@@ -309,9 +309,9 @@ namespace Test
             db.Add(stored);
             db.Commit();
 
-            Assert.IsNotNull(db.Get<TestClass4>(new KeyHolder(1)));
-            Assert.IsNotNull(db.Get<TestClass3>(new KeyHolder(2)));
-            Assert.IsNotNull(db.Get<TestClass4>(new KeyHolder(3)));
+            Assert.IsNotNull(db.Get<TestClass4>(new Keys(1)));
+            Assert.IsNotNull(db.Get<TestClass3>(new Keys(2)));
+            Assert.IsNotNull(db.Get<TestClass4>(new Keys(3)));
             Assert.AreEqual(3, db.Count());
         }
 
@@ -329,8 +329,8 @@ namespace Test
             });
             db.Commit();
 
-            var s1 = db.Get<TestClass5>(new KeyHolder((long)123));
-            var s2 = db.Get<TestClass5>(new KeyHolder((long)1234));
+            var s1 = db.Get<TestClass5>(new Keys((long)123));
+            var s2 = db.Get<TestClass5>(new Keys((long)1234));
 
             Assert.AreEqual(1, s1.Auto);
             Assert.AreEqual(2, s2.Auto);

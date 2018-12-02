@@ -53,7 +53,7 @@ namespace OrmMock.MemDb
         /// <typeparam name="T">The type of the object to remove.</typeparam>
         /// <param name="keys">The primary keys of the object to remove.</param>
         /// <returns>True if the object was removed; false otherwise.</returns>
-        bool Remove<T>(KeyHolder keys);
+        bool Remove<T>(Keys keys);
 
         /// <summary>
         /// Commits changes to the memory database instance. References and keys are updated.
@@ -86,6 +86,6 @@ namespace OrmMock.MemDb
         /// <typeparam name="T">The type of the objects to retrieve.</typeparam>
         /// <param name="keys">The primary keys of the object to retrieve.</param>
         /// <returns>An object, or null of no object with the given properties exist.</returns>
-        T Get<T>(KeyHolder keys);
+        T Get<T>(Keys keys);
     }
 }

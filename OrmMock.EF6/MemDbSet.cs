@@ -35,11 +35,27 @@ namespace OrmMock.EF6
 
     using Shared;
 
+    /// <summary>
+    /// Implements a MemDbSet.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
     public class MemDbSet<T> : IDbSet<T>
         where T : class
     {
+        /// <summary>
+        /// Holds the memory database reference.
+        /// </summary>
         private readonly IMemDb memDb;
 
+        /// <summary>
+        /// Holds the cached constructors.
+        /// </summary>
+        private Dictionary<Type, Func<object>> constructors = new Dictionary<Type, Func<object>>();
+
+        /// <summary>
+        /// Initializes a new instance of the MemDbSet class.
+        /// </summary>
+        /// <param name="memDb">The memory db instance.</param>
         public MemDbSet(IMemDb memDb)
         {
             this.memDb = memDb;
@@ -50,20 +66,25 @@ namespace OrmMock.EF6
 #pragma warning restore CS0219 // Variable is assigned but its value is never used
         }
 
-        private IQueryable<T> Queryable() => new MemDbAsyncEnumerable<T>(this.memDb.Get<T>());
-
+        /// <inheritdoc />
         public IEnumerator<T> GetEnumerator() => this.Queryable().GetEnumerator();
 
+        /// <inheritdoc />
         IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
 
+        /// <inheritdoc />
         public Expression Expression => this.Queryable().Expression;
 
+        /// <inheritdoc />
         public Type ElementType => typeof(T);
 
+        /// <inheritdoc />
         public IQueryProvider Provider => new MemDbAsyncQueryProvider<T>(this.Queryable().Provider);
 
-        public T Find(params object[] keyValues) => this.memDb.Get<T>(new KeyHolder(keyValues));
+        /// <inheritdoc />
+        public T Find(params object[] keyValues) => this.memDb.Get<T>(new Keys(keyValues));
 
+        /// <inheritdoc />
         public T Add(T entity)
         {
             this.memDb.Add(entity);
@@ -71,6 +92,7 @@ namespace OrmMock.EF6
             return entity;
         }
 
+        /// <inheritdoc />
         public T Remove(T entity)
         {
             this.memDb.Remove(entity);
@@ -78,21 +100,25 @@ namespace OrmMock.EF6
             return entity;
         }
 
-        public T Attach(T entity)
-        {
-            throw new NotImplementedException();
-        }
+        /// <inheritdoc />
+        public T Attach(T entity) => entity; // no-op.
 
-        public T Create()
-        {
-            throw new NotImplementedException();
-        }
+        /// <inheritdoc />
+        public T Create() => this.Create<T>();
 
+        /// <inheritdoc />
         public TDerivedEntity Create<TDerivedEntity>() where TDerivedEntity : class, T
         {
-            throw new NotImplementedException();
+            if (!this.constructors.TryGetValue(typeof(TDerivedEntity), out var constructor))
+            {
+                constructor = Reflection.Constructor(typeof(TDerivedEntity));
+                this.constructors.Add(typeof(TDerivedEntity), constructor);
+            }
+
+            return (TDerivedEntity)constructor();
         }
 
+        /// <inheritdoc />
         public ObservableCollection<T> Local { get; }
 
         /// <summary>
@@ -101,7 +127,7 @@ namespace OrmMock.EF6
         /// <param name="values">The initial seed values.</param>
         public void AddOrUpdate(params T[] values)
         {
-            foreach (var remove in this.Queryable().ToList())
+            foreach (var remove in this.memDb.Get<T>())
             {
                 this.memDb.Remove(remove);
             }
@@ -113,6 +139,12 @@ namespace OrmMock.EF6
                 this.Add(add);
             }
         }
+
+        /// <summary>
+        /// Gets a queryable for the current set type.
+        /// </summary>
+        /// <returns>A queryable for the current set type.</returns>
+        private IQueryable<T> Queryable() => new MemDbAsyncEnumerable<T>(this.memDb.Get<T>());
     }
 
     // See https://github.com/rowanmiller/EntityFramework.Testing/tree/master/src/EntityFramework.Testing

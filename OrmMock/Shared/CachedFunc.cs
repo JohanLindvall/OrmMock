@@ -20,46 +20,29 @@
 
 namespace OrmMock.Shared
 {
-    using Comparers;
+    using System;
 
     /// <summary>
-    /// Defines a class for holding and comparing object keys.
+    /// Class to hold a function defining a simple cache for a function.
     /// </summary>
-    public class KeyHolder
+    public static class CachedFunc
     {
         /// <summary>
-        /// Initializes a new instance of the KeyHolder class.
+        /// Creates a cached func calling the passed function once, storing its result and returning it in subsequent calls.
         /// </summary>
-        /// <param name="keys">The array of object keys.</param>
-        public KeyHolder(params object[] keys)
+        /// <typeparam name="T">The type of the returned object from the function.</typeparam>
+        /// <param name="input">The input function.</param>
+        /// <returns></returns>
+        public static Func<T> Create<T>(Func<T> input)
         {
-            this.Keys = keys;
-        }
+            Tuple<T> result = null;
 
-        /// <summary>
-        /// Gets the object keys.
-        /// </summary>
-        public object[] Keys { get; }
-
-        /// <summary>
-        /// Implements object equality.
-        /// </summary>
-        /// <param name="other">The other instance.</param>
-        /// <returns>Tru if the objects are equal, false otherwise.</returns>
-        public bool Equals(KeyHolder other) => ObjectArrayComparer.Default.Equals(this.Keys, other.Keys);
-
-        ///  <inheritdoc />
-        public override bool Equals(object other)
-        {
-            if (other is KeyHolder k)
+            return () =>
             {
-                return this.Equals(k);
-            }
+                result = result ?? Tuple.Create(input());
 
-            return false;
+                return result.Item1;
+            };
         }
-
-        ///  <inheritdoc />
-        public override int GetHashCode() => ObjectArrayComparer.Default.GetHashCode(this.Keys);
     }
 }

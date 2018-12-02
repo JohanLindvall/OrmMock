@@ -74,10 +74,10 @@ namespace OrmMock.MemDb
         }
 
         /// <inheritdoc />
-        public bool Remove(object o) => this.RemoveKeys(this.propertyAccessor.GetPrimaryKeys(o), o.GetType());
+        public bool Remove(object o) => this.Remove(this.propertyAccessor.GetPrimaryKeys(o), o.GetType());
 
         /// <inheritdoc />
-        public bool Remove<T>(KeyHolder keys) => this.RemoveKeys(keys, typeof(T));
+        public bool Remove<T>(Keys keys) => this.Remove(keys, typeof(T));
 
         /// <inheritdoc />
         public void Commit()
@@ -100,7 +100,7 @@ namespace OrmMock.MemDb
         public int Count<T>() => this.heldObjects.Count(o => o.GetType() == typeof(T));
 
         /// <inheritdoc />
-        public T Get<T>(KeyHolder keys)
+        public T Get<T>(Keys keys)
         {
             foreach (var heldObject in this.heldObjects)
             {
@@ -113,7 +113,13 @@ namespace OrmMock.MemDb
             return default(T);
         }
 
-        private bool RemoveKeys(KeyHolder keys, Type type)
+        /// <summary>
+        /// Removes an object of the given type having the given primary keys.
+        /// </summary>
+        /// <param name="keys"></param>
+        /// <param name="type"></param>
+        /// <returns></returns>
+        private bool Remove(Keys keys, Type type)
         {
             var result = false;
 
@@ -140,14 +146,19 @@ namespace OrmMock.MemDb
             return result;
         }
 
+        /// <summary>
+        /// Updates object relations and foreign keys of the held objects.
+        /// </summary>
+        /// <param name="seenObjects">The seen objects.</param>
         private void UpdateObjectRelations(HashSet<object> seenObjects)
         {
-            var primaryKeyLookup = Deferred(() => this.heldObjects.ToDictionary(heldObject => Tuple.Create(heldObject.GetType(), this.propertyAccessor.GetPrimaryKeys(heldObject)), heldObject => heldObject));
+            var primaryKeyLookup = CachedFunc.Create(() => this.heldObjects.ToDictionary(heldObject => Tuple.Create(heldObject.GetType(), this.propertyAccessor.GetPrimaryKeys(heldObject)), heldObject => heldObject));
 
             var incomingObjectsLookup = new Dictionary<Tuple<Type, Type>, IList<object>>();
 
             for (var pass = 0; pass < 2; ++pass)
             {
+                // pass 0 handle outgoing simple properties. pass 1 handle outgoing collection properties.
                 foreach (var currentObject in this.heldObjects)
                 {
                     var properties = this.propertyAccessor.GetProperties(currentObject.GetType());
@@ -219,13 +230,17 @@ namespace OrmMock.MemDb
             }
         }
 
+        /// <summary>
+        /// Discovers new objects by traversing the graph of added objects.
+        /// </summary>
+        /// <returns>The hashset of all held objects (including the new objects).</returns>
         private HashSet<object> DiscoverNewObjects()
         {
             var seenObjects = new HashSet<object>(this.heldObjects, new ReferenceEqualityComparer());
 
             foreach (var newObject in this.newObjects)
             {
-                foreach (var descendant in this.GetObjects(newObject, seenObjects))
+                foreach (var descendant in this.TraverseObjectGraph(newObject, seenObjects))
                 {
                     this.heldObjects.Add(descendant);
 
@@ -248,28 +263,21 @@ namespace OrmMock.MemDb
             return seenObjects;
         }
 
-        private static Func<T> Deferred<T>(Func<T> creator)
-        {
-            bool initialized = false;
-            T result = default(T);
-
-            return () =>
-            {
-                if (!initialized)
-                {
-                    result = creator();
-                    initialized = true;
-                }
-
-                return result;
-            };
-        }
-
+        /// <summary>
+        /// Determines if references to the given type should be followed by the object graph traversal function.
+        /// </summary>
+        /// <param name="t">The type of the object to inspect.</param>
+        /// <returns>True if the object with the given type should be followed; false otherwise.</returns>
         private static bool FollowType(Type t)
         {
             return t.IsClass && !t.IsGenericType && Nullable.GetUnderlyingType(t) == null && t != typeof(string);
         }
 
+        /// <summary>
+        /// Determines if references to the given collection type should be followed by the object graph traversal function.
+        /// </summary>
+        /// <param name="t">The type of the object to inspect.</param>
+        /// <returns>True if the object with the given collection type should be followed; false otherwise.</returns>
         private static bool FollowCollectionType(Type t)
         {
             if (t.IsGenericType)
@@ -282,7 +290,13 @@ namespace OrmMock.MemDb
             return false;
         }
 
-        private IEnumerable<object> GetObjects(object root, HashSet<object> seenObjects)
+        /// <summary>
+        /// Traverses the object graph starting from root. Traversed object are entered into seenObjects so that the same object is not traversed twice.
+        /// </summary>
+        /// <param name="root">The graph root.</param>
+        /// <param name="seenObjects">The dictionary of seen object.</param>
+        /// <returns>An enumerable of discovered objects.</returns>
+        private IEnumerable<object> TraverseObjectGraph(object root, HashSet<object> seenObjects)
         {
             if (root == null)
             {
@@ -305,7 +319,7 @@ namespace OrmMock.MemDb
 
                         foreach (var collectionItem in enumerable)
                         {
-                            foreach (var descendant in this.GetObjects(collectionItem, seenObjects))
+                            foreach (var descendant in this.TraverseObjectGraph(collectionItem, seenObjects))
                             {
                                 yield return descendant;
                             }
@@ -313,7 +327,7 @@ namespace OrmMock.MemDb
                     }
                     else if (FollowType(propertyType))
                     {
-                        foreach (var descendant in this.GetObjects(this.propertyAccessor.GetValue(root, property), seenObjects))
+                        foreach (var descendant in this.TraverseObjectGraph(this.propertyAccessor.GetValue(root, property), seenObjects))
                         {
                             yield return descendant;
                         }
