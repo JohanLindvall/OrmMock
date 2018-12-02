@@ -22,17 +22,33 @@ namespace OrmMock.Shared
 {
     using Comparers;
 
+    /// <summary>
+    /// Defines a class for holding and comparing object keys.
+    /// </summary>
     public class KeyHolder
     {
-        public KeyHolder(object[] keys)
+        /// <summary>
+        /// Initializes a new instance of the KeyHolder class.
+        /// </summary>
+        /// <param name="keys">The array of object keys.</param>
+        public KeyHolder(params object[] keys)
         {
             this.Keys = keys;
         }
 
+        /// <summary>
+        /// Gets the object keys.
+        /// </summary>
         public object[] Keys { get; }
 
+        /// <summary>
+        /// Implements object equality.
+        /// </summary>
+        /// <param name="other">The other instance.</param>
+        /// <returns>Tru if the objects are equal, false otherwise.</returns>
         public bool Equals(KeyHolder other) => ObjectArrayComparer.Default.Equals(this.Keys, other.Keys);
 
+        ///  <inheritdoc />
         public override bool Equals(object other)
         {
             if (other is KeyHolder k)
@@ -43,6 +59,7 @@ namespace OrmMock.Shared
             return false;
         }
 
+        ///  <inheritdoc />
         public override int GetHashCode() => ObjectArrayComparer.Default.GetHashCode(this.Keys);
     }
 }

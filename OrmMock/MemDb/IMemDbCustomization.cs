@@ -18,16 +18,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-namespace OrmMock.EF6
+namespace OrmMock.MemDb
 {
-    using MemDb;
+    using System;
+    using System.Linq.Expressions;
+    using Shared;
 
-    public static class MemDbExtensions
+    /// <summary>
+    /// Defines a customization interface for MemDb.
+    /// </summary>
+    public interface IMemDbCustomization
     {
-        public static MemDbSet<T> DbSet<T>(this IMemDb memDb)
-        where T : class
-        {
-            return new MemDbSet<T>(memDb);
-        }
+        /// <summary>
+        /// Gets the relations of the memory db instance.
+        /// </summary>
+        Relations Relations { get; }
+
+        /// <summary>
+        /// Register auto-increment properties of the memory db instance.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="expression"></param>
+        void RegisterAutoIncrement<T>(Expression<Func<T, object>> expression) where T : class;
     }
 }

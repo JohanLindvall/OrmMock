@@ -46,6 +46,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="MemDb\IMemDb.cs" />
+    <Compile Include="MemDb\IMemDbCustomization.cs" />
     <Compile Include="Shared\Comparers\ObjectArrayComparer.cs" />
     <Compile Include="Shared\Comparers\ReferenceEqualityComparer.cs" />
     <Compile Include="Shared\ExpressionUtility.cs" />

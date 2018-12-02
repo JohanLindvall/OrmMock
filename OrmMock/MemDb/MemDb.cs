@@ -18,10 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
-using OrmMock.Shared;
-using OrmMock.Shared.Comparers;
-
 namespace OrmMock.MemDb
 {
     using System;
@@ -31,10 +27,11 @@ namespace OrmMock.MemDb
     using System.Linq.Expressions;
     using System.Reflection;
 
-    public class MemDb
-    {
-        public Relations Relations { get; }
+    using Shared;
+    using Shared.Comparers;
 
+    public class MemDb : IMemDb, IMemDbCustomization
+    {
         private readonly IList<object> newObjects = new List<object>();
 
         private readonly IList<object> heldObjects = new List<object>();
@@ -49,19 +46,10 @@ namespace OrmMock.MemDb
             this.propertyAccessor = new PropertyAccessor(this.Relations);
         }
 
-        public void Add(object o)
-        {
-            this.newObjects.Add(o);
-        }
+        /// <inheritdoc />
+        public Relations Relations { get; }
 
-        public void AddMany(IEnumerable<object> objects)
-        {
-            foreach (var o in objects)
-            {
-                this.Add(o);
-            }
-        }
-
+        /// <inheritdoc />
         public void RegisterAutoIncrement<T>(Expression<Func<T, object>> expression) where T : class
         {
             foreach (var property in ExpressionUtility.GetPropertyInfo(expression))
@@ -70,10 +58,63 @@ namespace OrmMock.MemDb
             }
         }
 
-        public bool Remove(object o)
+        /// <inheritdoc />
+        public void Add(object o)
         {
-            var type = o.GetType();
-            var keys = this.propertyAccessor.GetPrimaryKeys(o);
+            this.newObjects.Add(o);
+        }
+
+        /// <inheritdoc />
+        public void AddMany(IEnumerable<object> objects)
+        {
+            foreach (var o in objects)
+            {
+                this.Add(o);
+            }
+        }
+
+        /// <inheritdoc />
+        public bool Remove(object o) => this.RemoveKeys(this.propertyAccessor.GetPrimaryKeys(o), o.GetType());
+
+        /// <inheritdoc />
+        public bool Remove<T>(KeyHolder keys) => this.RemoveKeys(keys, typeof(T));
+
+        /// <inheritdoc />
+        public void Commit()
+        {
+            var seenObjects = this.DiscoverNewObjects();
+
+            this.UpdateObjectRelations(seenObjects);
+        }
+
+        /// <inheritdoc />
+        public IEnumerable<T> Get<T>()
+        {
+            return this.heldObjects.Where(o => o.GetType() == typeof(T)).Select(o => (T)o);
+        }
+
+        /// <inheritdoc />
+        public int Count() => this.heldObjects.Count;
+
+        /// <inheritdoc />
+        public int Count<T>() => this.heldObjects.Count(o => o.GetType() == typeof(T));
+
+        /// <inheritdoc />
+        public T Get<T>(KeyHolder keys)
+        {
+            foreach (var heldObject in this.heldObjects)
+            {
+                if (heldObject.GetType() == typeof(T) && this.propertyAccessor.GetPrimaryKeys(heldObject).Equals(keys))
+                {
+                    return (T)heldObject;
+                }
+            }
+
+            return default(T);
+        }
+
+        private bool RemoveKeys(KeyHolder keys, Type type)
+        {
             var result = false;
 
             var i = this.heldObjects.Count - 1;
@@ -97,13 +138,6 @@ namespace OrmMock.MemDb
             }
 
             return result;
-        }
-
-        public void Commit()
-        {
-            var seenObjects = this.DiscoverNewObjects();
-
-            this.UpdateObjectRelations(seenObjects);
         }
 
         private void UpdateObjectRelations(HashSet<object> seenObjects)
@@ -212,32 +246,6 @@ namespace OrmMock.MemDb
             this.newObjects.Clear();
 
             return seenObjects;
-        }
-
-        public IQueryable<T> Queryable<T>()
-        {
-            return this.heldObjects.Where(o => o.GetType() == typeof(T)).Select(o => (T)o).AsQueryable();
-        }
-
-        public int Count() => this.heldObjects.Count;
-
-        public int Count(Type t) => this.heldObjects.Count(o => o.GetType() == t);
-
-        public int Count<T>() => this.Count(typeof(T));
-
-        public T Get<T>(params object[] keys)
-        {
-            var kh = new KeyHolder(keys);
-
-            foreach (var heldObject in this.heldObjects)
-            {
-                if (heldObject.GetType() == typeof(T) && this.propertyAccessor.GetPrimaryKeys(heldObject).Equals(kh))
-                {
-                    return (T)heldObject;
-                }
-            }
-
-            return default(T);
         }
 
         private static Func<T> Deferred<T>(Func<T> creator)

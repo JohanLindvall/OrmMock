@@ -18,10 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-using System;
-
 namespace OrmMock.DataGenerator
 {
+    using System;
+
     /// <summary>
     /// Implements generation of simple values.
     /// </summary>

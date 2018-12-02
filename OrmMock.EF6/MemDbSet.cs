@@ -1,4 +1,23 @@
-﻿
+﻿// Copyright(c) 2017, 2018 Johan Lindvall
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 namespace OrmMock.EF6
 {
     using System;
@@ -12,17 +31,18 @@ namespace OrmMock.EF6
     using System.Threading;
     using System.Threading.Tasks;
 
-    public class MemDbSet<T> : IDbSet<T>, IDbAsyncEnumerable<T>
+    using MemDb;
+
+    using Shared;
+
+    public class MemDbSet<T> : IDbSet<T>
         where T : class
     {
-        private readonly MemDb.MemDb memDb;
+        private readonly IMemDb memDb;
 
-        public MemDbSet(MemDb.MemDb memDb)
+        public MemDbSet(IMemDb memDb)
         {
             this.memDb = memDb;
-            this.ElementType = typeof(T);
-            this.Provider = new MemDbAsyncQueryProvider<T>(this.Queryable().Provider);
-            this.Expression = this.Queryable().Expression;
             this.Local = new ObservableCollection<T>();
 
 #pragma warning disable CS0219 // Variable is assigned but its value is never used
@@ -30,29 +50,19 @@ namespace OrmMock.EF6
 #pragma warning restore CS0219 // Variable is assigned but its value is never used
         }
 
-        private IQueryable<T> Queryable() => this.memDb.Queryable<T>();
+        private IQueryable<T> Queryable() => new MemDbAsyncEnumerable<T>(this.memDb.Get<T>());
 
+        public IEnumerator<T> GetEnumerator() => this.Queryable().GetEnumerator();
 
-        public IEnumerator<T> GetEnumerator()
-        {
-            return this.Queryable().GetEnumerator();
-        }
+        IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
 
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return this.GetEnumerator();
-        }
+        public Expression Expression => this.Queryable().Expression;
 
-        public Expression Expression { get; }
+        public Type ElementType => typeof(T);
 
-        public Type ElementType { get; }
+        public IQueryProvider Provider => new MemDbAsyncQueryProvider<T>(this.Queryable().Provider);
 
-        public IQueryProvider Provider { get; }
-
-        public T Find(params object[] keyValues)
-        {
-            return this.memDb.Get<T>(keyValues);
-        }
+        public T Find(params object[] keyValues) => this.memDb.Get<T>(new KeyHolder(keyValues));
 
         public T Add(T entity)
         {
@@ -84,16 +94,6 @@ namespace OrmMock.EF6
         }
 
         public ObservableCollection<T> Local { get; }
-
-        public IDbAsyncEnumerator<T> GetAsyncEnumerator()
-        {
-            throw new NotImplementedException();
-        }
-
-        IDbAsyncEnumerator IDbAsyncEnumerable.GetAsyncEnumerator()
-        {
-            return GetAsyncEnumerator();
-        }
 
         /// <summary>
         /// Seeds initial data. Called by reflection. Do not remove.
