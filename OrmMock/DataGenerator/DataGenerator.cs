@@ -68,6 +68,11 @@ namespace OrmMock.DataGenerator
         private readonly ValueCreator valueCreator = new ValueCreator();
 
         /// <summary>
+        /// Holds the property accessor.
+        /// </summary>
+        private readonly PropertyAccessor propertyAccessor;
+
+        /// <summary>
         /// Gets or sets the limit of how many object to create in one pass.
         /// </summary>
         public int ObjectLimit { get; set; } = 1000;
@@ -106,12 +111,14 @@ namespace OrmMock.DataGenerator
         {
             this.customization = new Customization();
             this.Relations = new Relations();
+            this.propertyAccessor = new PropertyAccessor(this.Relations);
         }
 
-        private DataGenerator(Customization customization, Relations relations)
+        private DataGenerator(Customization customization, Relations relations, PropertyAccessor propertyAccessor)
         {
             this.customization = customization;
             this.Relations = relations;
+            this.propertyAccessor = propertyAccessor;
         }
 
         /// <summary>
@@ -160,7 +167,7 @@ namespace OrmMock.DataGenerator
         /// <returns>A typed build context.</returns>
         public ForTypeContext<T> Build<T>()
         {
-            return new DataGenerator(new Customization(this.customization), this.Relations).For<T>();
+            return new DataGenerator(new Customization(this.customization), this.Relations, this.propertyAccessor).For<T>();
         }
 
         /// <summary>
@@ -400,12 +407,11 @@ namespace OrmMock.DataGenerator
                     if (valueFunc != null)
                     {
                         propertyPlacement.Add(property, methods.Count);
-                        var setterDelegate = Reflection.Setter(property);
                         methods.Add((currentObject, _, currentSingleton) =>
                         {
                             if (!currentSingleton)
                             {
-                                setterDelegate(currentObject, valueFunc(this));
+                                this.propertyAccessor.SetValue(currentObject, property, valueFunc(this));
                             }
                         });
                     }
@@ -438,25 +444,14 @@ namespace OrmMock.DataGenerator
                                     }
 
                                     var elementType = propertyType.GetGenericArguments()[0];
-                                    var collectionAdder = Reflection.Caller(typeof(ICollection<>).MakeGenericType(elementType), elementType, nameof(ICollection<int>.Add));
-                                    var hashSetCreator = Reflection.Constructor(typeof(HashSet<>).MakeGenericType(elementType));
-                                    var collectionSetter = Reflection.Setter(property);
-                                    var collectionGetter = Reflection.Getter(property);
 
                                     methods.Add((currentObject, currentSources, currentSingleton) =>
                                     {
-                                        var collection = collectionGetter(currentObject);
-                                        if (collection == null)
-                                        {
-                                            collection = hashSetCreator();
-                                            collectionSetter(currentObject, collection);
-                                        }
-
                                         var source = GetSource(currentSources, elementType, lookbackCount);
 
                                         if (source != null)
                                         {
-                                            collectionAdder(collection, source);
+                                            this.propertyAccessor.AddToCollection(property, currentObject, new[] { source });
                                         }
                                         else
                                         {
@@ -471,7 +466,7 @@ namespace OrmMock.DataGenerator
 
                                             for (var i = 0; i < includeCount; ++i)
                                             {
-                                                collectionAdder(collection, CreateObject(elementType, currentSources));
+                                                this.propertyAccessor.AddToCollection(property, currentObject, new[] { CreateObject(elementType, currentSources) });
                                             }
 
                                             currentSources.RemoveAt(currentSources.Count - 1);
@@ -498,11 +493,6 @@ namespace OrmMock.DataGenerator
                                     continue;
                                 }
 
-                                var foreignKeySetters = Reflection.Setters(foreignKeyProps);
-                                var primaryKeyGetters = Reflection.Getters(this.Relations.GetPrimaryKeys(propertyType)); // Getters in foreign object.
-                                var foreignObjectGetter = Reflection.Getter(property);
-                                var foreignObjectSetter = Reflection.Setter(property);
-
                                 var foreignKeyNullableGetDelegate = foreignKeyProps.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(Reflection.Getter).FirstOrDefault();
 
                                 methods.Add((currentObject, currentSources, currentSingleton) =>
@@ -526,7 +516,7 @@ namespace OrmMock.DataGenerator
 
                                     if (currentSingleton)
                                     {
-                                        var existing = foreignObjectGetter(currentObject);
+                                        var existing = this.propertyAccessor.GetValue(currentObject, property);
 
                                         if (!ReferenceEquals(foreignObject, existing) && existing != null)
                                         {
@@ -539,21 +529,15 @@ namespace OrmMock.DataGenerator
                                         // Clear nullable foreign keys
                                         if (foreignKeyNullableGetDelegate != null)
                                         {
-                                            for (var i = 0; i < foreignKeyProps.Length; ++i)
-                                            {
-                                                foreignKeySetters[i](currentObject, null);
-                                            }
+                                            this.propertyAccessor.ClearForeignKeys(currentObject, propertyType);
                                         }
                                     }
                                     else
                                     {
                                         // Set foreign keys to primary keys of related object.
-                                        for (var i = 0; i < foreignKeyProps.Length; ++i)
-                                        {
-                                            foreignKeySetters[i](currentObject, primaryKeyGetters[i](foreignObject));
-                                        }
+                                        this.propertyAccessor.SetForeignKeys(currentObject, propertyType, this.propertyAccessor.GetPrimaryKeys(foreignObject));
 
-                                        foreignObjectSetter(currentObject, foreignObject);
+                                        this.propertyAccessor.SetValue(currentObject, property, foreignObject);
                                     }
                                 });
 

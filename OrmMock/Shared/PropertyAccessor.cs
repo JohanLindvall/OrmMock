@@ -43,20 +43,28 @@ namespace OrmMock.Shared
 
         private readonly Dictionary<Tuple<Type, Type>, Action<object>> foreignKeyClearerCache = new Dictionary<Tuple<Type, Type>, Action<object>>();
 
-        private readonly Dictionary<PropertyInfo, Action<object, IList<object>>> collectionSetterCache = new Dictionary<PropertyInfo, Action<object, IList<object>>>();
+        private readonly Dictionary<PropertyInfo, Action<object, bool, IList<object>>> collectionSetterCache = new Dictionary<PropertyInfo, Action<object, bool, IList<object>>>();
 
         public PropertyAccessor(Relations relations)
         {
             this.relations = relations;
         }
 
-        public void SetCollection(PropertyInfo property, object o, IList<object> contents)
+        public void SetCollection(PropertyInfo property, object o, IList<object> contents) => this.SetCollection(property, o, true, contents);
+
+        public void AddToCollection(PropertyInfo property, object o, IList<object> contents) => this.SetCollection(property, o, false, contents);
+
+        private void SetCollection(PropertyInfo property, object o, bool clear, IList<object> contents)
         {
             if (!this.collectionSetterCache.TryGetValue(property, out var collectionSetter))
             {
-                var constructor = Reflection.Constructor(typeof(HashSet<>).MakeGenericType(property.PropertyType.GenericTypeArguments[0]));
+                var genericArgument = property.PropertyType.GenericTypeArguments[0];
+                var interfaceType = typeof(ICollection<>).MakeGenericType(genericArgument);
+                var constructor = Reflection.Constructor(typeof(HashSet<>).MakeGenericType(genericArgument));
+                var clearer = Reflection.Caller(interfaceType, nameof(ICollection<int>.Clear));
+                var adder = Reflection.Caller(interfaceType, genericArgument, nameof(ICollection<int>.Add));
 
-                collectionSetter = (localObjects, localContents) =>
+                collectionSetter = (localObjects, localClear, localContents) =>
                 {
                     var propertyValue = this.GetValue(o, property);
                     if (propertyValue == null)
@@ -65,10 +73,10 @@ namespace OrmMock.Shared
                         this.SetValue(o, property, propertyValue);
                     }
 
-                    var clearer = Reflection.Caller(propertyValue.GetType(), nameof(ICollection<int>.Clear));
-                    var adder = Reflection.Caller(propertyValue.GetType(), property.PropertyType.GetGenericArguments()[0], nameof(ICollection<int>.Add));
-
-                    clearer(propertyValue);
+                    if (localClear)
+                    {
+                        clearer(propertyValue);
+                    }
 
                     foreach (var item in localContents)
                     {
@@ -79,7 +87,7 @@ namespace OrmMock.Shared
                 this.collectionSetterCache.Add(property, collectionSetter);
             }
 
-            collectionSetter(o, contents);
+            collectionSetter(o, clear, contents);
         }
 
         public PropertyInfo[] GetProperties(Type t)
@@ -169,7 +177,7 @@ namespace OrmMock.Shared
 
                     for (var i = 0; i < setters.Count; ++i)
                     {
-                        setters[i](o, keys.Data[i]);
+                        setters[i](local, keys.Data[i]);
                     }
                 };
 
