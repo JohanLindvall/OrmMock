@@ -1,3 +1,3 @@
 [submodule "OrmMock/Shared/fasterflect"]
 	path = OrmMock/Shared/fasterflect
-	url = git@github.com:JohanLindvall/fasterflect.git
+	url = https://github.com/JohanLindvall/fasterflect.git
