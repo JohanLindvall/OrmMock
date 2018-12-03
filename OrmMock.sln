@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrmMock.EF6", "OrmMock.EF6\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrmMock.EF6.Test", "OrmMock.EF6.Test\OrmMock.EF6.Test.csproj", "{FA28EBD0-A1CC-4313-B29D-103953B32874}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fasterflect", "OrmMock\Shared\fasterflect\Fasterflect\Fasterflect\Fasterflect.csproj", "{FDF54936-A188-45B1-B482-632DA23DB0B0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{FA28EBD0-A1CC-4313-B29D-103953B32874}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FA28EBD0-A1CC-4313-B29D-103953B32874}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FA28EBD0-A1CC-4313-B29D-103953B32874}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FDF54936-A188-45B1-B482-632DA23DB0B0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FDF54936-A188-45B1-B482-632DA23DB0B0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FDF54936-A188-45B1-B482-632DA23DB0B0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FDF54936-A188-45B1-B482-632DA23DB0B0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

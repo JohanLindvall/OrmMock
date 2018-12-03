@@ -438,10 +438,8 @@ namespace OrmMock.DataGenerator
                                     }
 
                                     var elementType = propertyType.GetGenericArguments()[0];
-                                    var collectionType = typeof(HashSet<>).MakeGenericType(elementType);
-                                    var collectionAdder = Reflection.Caller(collectionType, elementType, nameof(ICollection<int>.Add));
-                                    var hashSetCreator = Reflection.Constructor(collectionType);
-                                    var collectionTypeVerified = false;
+                                    var collectionAdder = Reflection.Caller(typeof(ICollection<>).MakeGenericType(elementType), elementType, nameof(ICollection<int>.Add));
+                                    var hashSetCreator = Reflection.Constructor(typeof(HashSet<>).MakeGenericType(elementType));
                                     var collectionSetter = Reflection.Setter(property);
                                     var collectionGetter = Reflection.Getter(property);
 
@@ -450,19 +448,8 @@ namespace OrmMock.DataGenerator
                                         var collection = collectionGetter(currentObject);
                                         if (collection == null)
                                         {
-                                            collectionTypeVerified = true;
                                             collection = hashSetCreator();
                                             collectionSetter(currentObject, collection);
-                                        }
-                                        else if (!collectionTypeVerified)
-                                        {
-                                            collectionTypeVerified = true;
-                                            var existingCollectionType = collection.GetType();
-                                            if (existingCollectionType != collectionType)
-                                            {
-                                                collectionAdder = Reflection.Caller(existingCollectionType, elementType, nameof(ICollection<int>.Add));
-                                                hashSetCreator = Reflection.Constructor(existingCollectionType);
-                                            }
                                         }
 
                                         var source = GetSource(currentSources, elementType, lookbackCount);
