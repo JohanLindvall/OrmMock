@@ -1,3 +1,4 @@
 [submodule "OrmMock/Shared/fasterflect"]
 	path = OrmMock/Shared/fasterflect
 	url = https://github.com/JohanLindvall/fasterflect.git
+	branch = remove_caching
