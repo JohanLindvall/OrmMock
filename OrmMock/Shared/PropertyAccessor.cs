@@ -198,7 +198,7 @@ namespace OrmMock.Shared
             {
                 var foreignKeys = this.relations.GetForeignKeys(thisType, foreignType);
 
-                if (foreignKeys.Any(fk => !CanSetKeyToNull(fk.PropertyType)))
+                if (foreignKeys.Any(fk => !Reflection.IsNullable(fk)))
                 {
                     throw new InvalidOperationException("Not all keys are nullable.");
                 }
@@ -217,12 +217,6 @@ namespace OrmMock.Shared
             }
 
             clearer(o);
-        }
-
-
-        private static bool CanSetKeyToNull(Type t)
-        {
-            return t == typeof(string) || Nullable.GetUnderlyingType(t) != null;
         }
     }
 }

@@ -493,14 +493,14 @@ namespace OrmMock.DataGenerator
                                     continue;
                                 }
 
-                                var foreignKeyNullableGetDelegate = foreignKeyProps.Where(fkp => Nullable.GetUnderlyingType(fkp.PropertyType) != null).Select(Reflection.Getter).FirstOrDefault();
+                                var foreignKeyNullableGetters = foreignKeyProps.Where(Reflection.IsNullable).Select(Reflection.Getter).ToList();
 
                                 methods.Add((currentObject, currentSources, currentSingleton) =>
                                 {
                                     // Handle nullable
                                     object foreignObject = null;
 
-                                    if (foreignKeyNullableGetDelegate == null || foreignKeyNullableGetDelegate(currentObject) != null)
+                                    if (foreignKeyNullableGetters.All(fk => fk(currentObject) != null))
                                     {
                                         foreignObject = GetSource(currentSources, propertyType, lookbackCount);
 
@@ -526,11 +526,8 @@ namespace OrmMock.DataGenerator
 
                                     if (foreignObject == null)
                                     {
-                                        // Clear nullable foreign keys
-                                        if (foreignKeyNullableGetDelegate != null)
-                                        {
-                                            this.propertyAccessor.ClearForeignKeys(currentObject, propertyType);
-                                        }
+                                        // Clear nullable foreign keys. Will fail if not all keys can be set to null.
+                                        this.propertyAccessor.ClearForeignKeys(currentObject, propertyType);
                                     }
                                     else
                                     {
@@ -544,10 +541,9 @@ namespace OrmMock.DataGenerator
                                 // For non 1:1-relations - remove the code setting the foreign keys to generated values. (For 1:1-relations, this would remove the code setting primary keys)
                                 if (!pkFkEqual)
                                 {
-                                    for (var i = foreignKeyNullableGetDelegate == null ? 0 : 1; i < foreignKeyProps.Length; i++)
+                                    // Leave nullable foreign key props set, as this is used above as a key to creating referenced objects.
+                                    foreach (var foreignKeyProp in foreignKeyProps.Where(f => !Reflection.IsNullable(f)))
                                     {
-                                        var foreignKeyProp = foreignKeyProps[i];
-
                                         if (propertyPlacement.TryGetValue(foreignKeyProp, out var methodIndex))
                                         {
                                             methods[methodIndex] = null;

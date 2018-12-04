@@ -88,5 +88,7 @@ namespace OrmMock.Shared
         }
 
         public static IList<PropertyInfo> GetPublicPropertiesWithGettersAndSetters(Type t) => t.GetProperties().Where(p => p.GetMethod != null && p.SetMethod != null).ToList();
+
+        public static bool IsNullable(PropertyInfo property) => Nullable.GetUnderlyingType(property.PropertyType) != null || property.PropertyType == typeof(string);
     }
 }
