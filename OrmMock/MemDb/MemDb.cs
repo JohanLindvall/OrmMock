@@ -36,14 +36,16 @@ namespace OrmMock.MemDb
 
         private readonly IList<object> heldObjects = new List<object>();
 
-        private readonly PropertyAccessor propertyAccessor;
-
         private readonly Dictionary<PropertyInfo, long> autoIncrement = new Dictionary<PropertyInfo, long>();
+
+        private readonly Memoization memoization = new Memoization();
+
+        private readonly IReflection reflection;
 
         public MemDb()
         {
             this.Relations = new Relations();
-            this.propertyAccessor = new PropertyAccessor(this.Relations);
+            this.reflection = new FasterflectReflection();
         }
 
         /// <inheritdoc />
@@ -74,7 +76,7 @@ namespace OrmMock.MemDb
         }
 
         /// <inheritdoc />
-        public bool Remove(object o) => this.Remove(this.propertyAccessor.GetPrimaryKeys(o), o.GetType());
+        public bool Remove(object o) => this.Remove(this.GetPrimaryKeys(o), o.GetType());
 
         /// <inheritdoc />
         public bool Remove<T>(Keys keys) => this.Remove(keys, typeof(T));
@@ -102,9 +104,12 @@ namespace OrmMock.MemDb
         /// <inheritdoc />
         public T Get<T>(Keys keys)
         {
+            var type = typeof(T);
+            var keyGetter = PrimaryKeyGetter(type);
+
             foreach (var heldObject in this.heldObjects)
             {
-                if (heldObject.GetType() == typeof(T) && this.propertyAccessor.GetPrimaryKeys(heldObject).Equals(keys))
+                if (heldObject.GetType() == type && keyGetter(heldObject).Equals(keys))
                 {
                     return (T)heldObject;
                 }
@@ -113,10 +118,8 @@ namespace OrmMock.MemDb
             return default(T);
         }
 
-        public T Create<T>()
-        {
-            return Activator.CreateInstance<T>(); // TODO
-        }
+        /// <inheritdoc />
+        public T Create<T>() => (T)this.CreateObject(typeof(T));
 
         /// <summary>
         /// Removes an object of the given type having the given primary keys.
@@ -127,6 +130,7 @@ namespace OrmMock.MemDb
         private bool Remove(Keys keys, Type type)
         {
             var result = false;
+            var keyGetter = PrimaryKeyGetter(type);
 
             var i = this.heldObjects.Count - 1;
 
@@ -136,7 +140,7 @@ namespace OrmMock.MemDb
 
                 if (toCheck.GetType() == type)
                 {
-                    var toCheckKeys = this.propertyAccessor.GetPrimaryKeys(toCheck);
+                    var toCheckKeys = keyGetter(toCheck);
 
                     if (keys.Equals(toCheckKeys))
                     {
@@ -157,7 +161,7 @@ namespace OrmMock.MemDb
         /// <param name="seenObjects">The seen objects.</param>
         private void UpdateObjectRelations(HashSet<object> seenObjects)
         {
-            var primaryKeyLookup = CachedFunc.Create(() => this.heldObjects.ToDictionary(heldObject => Tuple.Create(heldObject.GetType(), this.propertyAccessor.GetPrimaryKeys(heldObject)), heldObject => heldObject));
+            var primaryKeyLookup = CachedFunc.Create(() => this.heldObjects.ToDictionary(heldObject => Tuple.Create(heldObject.GetType(), this.GetPrimaryKeys(heldObject)), heldObject => heldObject));
 
             var incomingObjectsLookup = new Dictionary<Tuple<Type, Type>, IList<object>>();
 
@@ -166,7 +170,7 @@ namespace OrmMock.MemDb
                 // pass 0 handle outgoing simple properties. pass 1 handle outgoing collection properties.
                 foreach (var currentObject in this.heldObjects)
                 {
-                    var properties = this.propertyAccessor.GetProperties(currentObject.GetType());
+                    var properties = this.GetProperties(currentObject);
 
                     foreach (var property in properties)
                     {
@@ -184,7 +188,7 @@ namespace OrmMock.MemDb
                             if (incomingObjectsLookup.TryGetValue(incomingObjectsKey, out var incomingObjects))
                             {
                                 // Set ICollection to incoming objects.
-                                this.propertyAccessor.SetCollection(property, currentObject, incomingObjects);
+                                this.SetCollection(currentObject, property, incomingObjects);
                             }
 
                             // else leave untouched (unknown collection property)
@@ -196,24 +200,24 @@ namespace OrmMock.MemDb
                                 continue;
                             }
 
-                            var foreignObject = this.propertyAccessor.GetValue(currentObject, property);
+                            var foreignObject = this.GetValue(currentObject, property);
 
                             if (seenObjects.Contains(foreignObject))
                             {
                                 // Update foreign keys to match foreignObject
-                                var primaryKeysOfForeignObject = this.propertyAccessor.GetPrimaryKeys(foreignObject);
+                                var primaryKeysOfForeignObject = this.GetPrimaryKeys(foreignObject);
 
-                                this.propertyAccessor.SetForeignKeys(currentObject, foreignObject.GetType(), primaryKeysOfForeignObject); // For 1:1 primary keys may change.
+                                this.SetForeignKeys(currentObject, foreignObject.GetType(), primaryKeysOfForeignObject); // For 1:1 primary keys may change.
                             }
-                            else if (primaryKeyLookup().TryGetValue(Tuple.Create(propertyType, this.propertyAccessor.GetForeignKeys(currentObject, propertyType)), out foreignObject))
+                            else if (primaryKeyLookup().TryGetValue(Tuple.Create(propertyType, this.GetForeignKeys(currentObject, propertyType)), out foreignObject))
                             {
-                                this.propertyAccessor.SetValue(currentObject, property, foreignObject);
+                                this.SetValue(currentObject, property, foreignObject);
                             }
                             else
                             {
                                 // Object not found. Clear nullable foreign keys.
-                                this.propertyAccessor.SetValue(currentObject, property, null);
-                                this.propertyAccessor.ClearForeignKeys(currentObject, propertyType);
+                                this.SetValue(currentObject, property, null);
+                                this.ClearForeignKeys(currentObject, propertyType);
                             }
 
                             // Build up reverse mapping of incoming objects at foreignObject
@@ -250,13 +254,13 @@ namespace OrmMock.MemDb
                     this.heldObjects.Add(descendant);
 
                     // Auto-increment for new objects.
-                    var properties = this.propertyAccessor.GetProperties(descendant.GetType());
+                    var properties = this.GetProperties(descendant);
 
                     foreach (var property in properties)
                     {
                         if (this.autoIncrement.TryGetValue(property, out var value))
                         {
-                            this.propertyAccessor.SetValue(descendant, property, Convert.ChangeType(++value, property.PropertyType));
+                            this.SetValue(descendant, property, Convert.ChangeType(++value, property.PropertyType));
                             this.autoIncrement[property] = value;
                         }
                     }
@@ -312,7 +316,7 @@ namespace OrmMock.MemDb
             {
                 yield return root;
 
-                var properties = this.propertyAccessor.GetProperties(root.GetType());
+                var properties = this.GetProperties(root);
 
                 foreach (var property in properties)
                 {
@@ -320,7 +324,7 @@ namespace OrmMock.MemDb
 
                     if (FollowCollectionType(propertyType))
                     {
-                        var enumerable = (IEnumerable)this.propertyAccessor.GetValue(root, property);
+                        var enumerable = (IEnumerable)this.GetValue(root, property);
 
                         foreach (var collectionItem in enumerable)
                         {
@@ -332,7 +336,7 @@ namespace OrmMock.MemDb
                     }
                     else if (FollowType(propertyType))
                     {
-                        foreach (var descendant in this.TraverseObjectGraph(this.propertyAccessor.GetValue(root, property), seenObjects))
+                        foreach (var descendant in this.TraverseObjectGraph(this.GetValue(root, property), seenObjects))
                         {
                             yield return descendant;
                         }
@@ -340,5 +344,25 @@ namespace OrmMock.MemDb
                 }
             }
         }
+
+        private object CreateObject(Type type) => this.memoization.Get(nameof(this.CreateObject), type, () => this.reflection.Constructor(type))();
+
+        private Func<object, Keys> PrimaryKeyGetter(Type type) => this.memoization.Get(nameof(this.PrimaryKeyGetter), type, () => this.reflection.PrimaryKeyGetter(this.Relations, type));
+
+        private Keys GetPrimaryKeys(object o) => this.PrimaryKeyGetter(o.GetType())(o);
+
+        private IList<PropertyInfo> GetProperties(object o) => this.memoization.Get(nameof(this.GetProperties), o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()));
+
+        private object GetValue(object o, PropertyInfo pi) => this.memoization.Get(nameof(this.GetValue), pi, () => this.reflection.Getter(pi))(o);
+
+        private void SetValue(object o, PropertyInfo pi, object value) => this.memoization.Get(nameof(this.SetValue), pi, () => this.reflection.Setter(pi))(o, value);
+
+        private Keys GetForeignKeys(object o, Type foreignType) => this.memoization.Get(nameof(this.GetForeignKeys), o.GetType(), foreignType, () => this.reflection.ForeignKeyGetter(this.Relations, o.GetType(), foreignType))(o);
+
+        private void SetCollection(object o, PropertyInfo pi, IList<object> values) => this.memoization.Get(nameof(this.SetCollection), pi, () => this.reflection.CollectionSetter(pi))(o, values);
+
+        private void SetForeignKeys(object o, Type foreignType, Keys keys) => this.memoization.Get(nameof(this.SetForeignKeys), o.GetType(), foreignType, () => this.reflection.ForeignKeySetter(this.Relations, o.GetType(), foreignType))(o, keys);
+
+        private void ClearForeignKeys(object o, Type foreignType) => this.memoization.Get(nameof(this.ClearForeignKeys), o.GetType(), foreignType, () => this.reflection.ForeignKeyClearer(this.Relations, o.GetType(), foreignType))(o);
     }
 }
