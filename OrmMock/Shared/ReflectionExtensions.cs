@@ -123,42 +123,7 @@ namespace OrmMock.Shared
         /// <param name="reflection">The IReflection instance.</param>
         /// <param name="propertyInfo">The property info.</param>
         /// <returns>A function object setting the contents of the collection to the given list of items.</returns>
-        public static Action<object, IList<object>> CollectionSetter(this IReflection reflection, PropertyInfo propertyInfo)
-        {
-            var genericArgument = propertyInfo.PropertyType.GenericTypeArguments[0];
-            var interfaceType = typeof(ICollection<>).MakeGenericType(genericArgument);
-            var constructor = reflection.Constructor(typeof(HashSet<>).MakeGenericType(genericArgument));
-            var adder = reflection.Caller(interfaceType, genericArgument, nameof(ICollection<int>.Add));
-            var clearer = reflection.Caller(interfaceType, nameof(ICollection<int>.Clear));
-            var setValue = ReflectionUtility.CanSetProperty(propertyInfo) ? reflection.Setter(propertyInfo) : null;
-            var getValue = reflection.Getter(propertyInfo);
-
-            return (o, list) =>
-            {
-                var propertyValue = getValue(o);
-                if (propertyValue == null)
-                {
-                    if (setValue == null)
-                    {
-                        FailNoSetter(propertyInfo);
-                    }
-                    else
-                    {
-                        propertyValue = constructor();
-                        setValue(o, propertyValue);
-                    }
-                }
-                else
-                {
-                    clearer(propertyValue);
-                }
-
-                foreach (var item in list)
-                {
-                    adder(propertyValue, item);
-                }
-            };
-        }
+        public static Action<object, IList<object>> CollectionSetter(this IReflection reflection, PropertyInfo propertyInfo) => reflection.CollectionSetter(propertyInfo, true);
 
         /// <summary>
         /// Creates a function adding the list of items to the ICollection of the given property.
@@ -166,12 +131,27 @@ namespace OrmMock.Shared
         /// <param name="reflection">The IReflection instance.</param>
         /// <param name="propertyInfo">The property info.</param>
         /// <returns>A function object setting the contents of the collection to the given list of items.</returns>
-        public static Action<object, IList<object>> CollectionAdder(this IReflection reflection, PropertyInfo propertyInfo)
+        public static Action<object, IList<object>> CollectionAdder(this IReflection reflection, PropertyInfo propertyInfo) => reflection.CollectionSetter(propertyInfo, false);
+
+        /// <summary>
+        /// Creates a function setting the contents of the ICollection of the given property to the list of items.
+        /// </summary>
+        /// <param name="reflection">The IReflection instance.</param>
+        /// <param name="propertyInfo">The property info.</param>
+        /// <param name="clear">Determines if the collection should be cleared.</param>
+        /// <returns>A function object setting the contents of the collection to the given list of items.</returns>
+        public static Action<object, IList<object>> CollectionSetter(this IReflection reflection, PropertyInfo propertyInfo, bool clear)
         {
             var genericArgument = propertyInfo.PropertyType.GenericTypeArguments[0];
             var interfaceType = typeof(ICollection<>).MakeGenericType(genericArgument);
+            if (!interfaceType.IsAssignableFrom(propertyInfo.PropertyType))
+            {
+                throw new InvalidOperationException($@"Only collections based on ICollection<> are supported.");
+            }
+
             var constructor = reflection.Constructor(typeof(HashSet<>).MakeGenericType(genericArgument));
             var adder = reflection.Caller(interfaceType, genericArgument, nameof(ICollection<int>.Add));
+            var clearer = clear ? reflection.Caller(interfaceType, nameof(ICollection<int>.Clear)) : null;
             var setValue = ReflectionUtility.CanSetProperty(propertyInfo) ? reflection.Setter(propertyInfo) : null;
             var getValue = reflection.Getter(propertyInfo);
 
@@ -182,13 +162,15 @@ namespace OrmMock.Shared
                 {
                     if (setValue == null)
                     {
-                        FailNoSetter(propertyInfo);
+                        throw new InvalidOperationException($@"Unable to set property {propertyInfo.Name} because it has no setter."); ;
                     }
-                    else
-                    {
-                        propertyValue = constructor();
-                        setValue(o, propertyValue);
-                    }
+
+                    propertyValue = constructor();
+                    setValue(o, propertyValue);
+                }
+                else
+                {
+                    clearer?.Invoke(propertyValue);
                 }
 
                 foreach (var item in list)
@@ -196,15 +178,6 @@ namespace OrmMock.Shared
                     adder(propertyValue, item);
                 }
             };
-        }
-
-        /// <summary>
-        /// Throws InvalidOperationException with the given property's name.
-        /// </summary>
-        /// <param name="propertyInfo"></param>
-        private static void FailNoSetter(PropertyInfo propertyInfo)
-        {
-            throw new InvalidOperationException($@"Unable to set property {propertyInfo.Name} because it has no setter.");
         }
     }
 }

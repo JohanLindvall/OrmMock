@@ -437,48 +437,41 @@ namespace OrmMock.DataGenerator
 
                             if (propertyType.IsGenericType)
                             {
-                                if (propertyType.GetGenericTypeDefinition() == typeof(ICollection<>))
+                                if (pass != 2)
                                 {
-                                    if (pass != 2)
+                                    continue;
+                                }
+
+                                var elementType = propertyType.GetGenericArguments()[0];
+                                var adder = this.reflection.CollectionAdder(property); // will fail if generic type is not based on ICollection<>
+
+                                methods.Add((currentObject, currentSources, currentSingleton) =>
+                                {
+                                    var source = GetSource(currentSources, elementType, lookbackCount);
+
+                                    if (source != null)
                                     {
-                                        continue;
+                                        adder(currentObject, new[] { source });
                                     }
-
-                                    var elementType = propertyType.GetGenericArguments()[0];
-                                    var adder = this.reflection.CollectionAdder(property);
-
-                                    methods.Add((currentObject, currentSources, currentSingleton) =>
+                                    else
                                     {
-                                        var source = GetSource(currentSources, elementType, lookbackCount);
-
-                                        if (source != null)
+                                        if (currentSingleton)
                                         {
-                                            adder(currentObject, new[] { source });
+                                            return; // The current value is an already existing singleton. Do not change any of its values.
                                         }
-                                        else
+
+                                        var includeCount = this.customization.GetIncludeCount(property, currentSources.Count == 0 ? this.RootCollectionMembers : this.NonRootCollectionMembers);
+
+                                        currentSources.Add(currentObject);
+
+                                        for (var i = 0; i < includeCount; ++i)
                                         {
-                                            if (currentSingleton)
-                                            {
-                                                return; // The current value is an already existing singleton. Do not change any of its values.
-                                            }
-
-                                            var includeCount = this.customization.GetIncludeCount(property, currentSources.Count == 0 ? this.RootCollectionMembers : this.NonRootCollectionMembers);
-
-                                            currentSources.Add(currentObject);
-
-                                            for (var i = 0; i < includeCount; ++i)
-                                            {
-                                                adder(currentObject, new[] { CreateObject(elementType, currentSources) });
-                                            }
-
-                                            currentSources.RemoveAt(currentSources.Count - 1);
+                                            adder(currentObject, new[] { CreateObject(elementType, currentSources) });
                                         }
-                                    });
-                                }
-                                else
-                                {
-                                    throw new InvalidOperationException("Unsupported type. Only generic types derived from ICollection<> are handled.");
-                                }
+
+                                        currentSources.RemoveAt(currentSources.Count - 1);
+                                    }
+                                });
                             }
                             else
                             {
