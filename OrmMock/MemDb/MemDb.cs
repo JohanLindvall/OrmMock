@@ -113,6 +113,11 @@ namespace OrmMock.MemDb
             return default(T);
         }
 
+        public T Create<T>()
+        {
+            return Activator.CreateInstance<T>(); // TODO
+        }
+
         /// <summary>
         /// Removes an object of the given type having the given primary keys.
         /// </summary>

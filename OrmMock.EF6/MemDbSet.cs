@@ -48,11 +48,6 @@ namespace OrmMock.EF6
         private readonly IMemDb memDb;
 
         /// <summary>
-        /// Holds the cached constructors.
-        /// </summary>
-        private Dictionary<Type, Func<object>> constructors = new Dictionary<Type, Func<object>>();
-
-        /// <summary>
         /// Initializes a new instance of the MemDbSet class.
         /// </summary>
         /// <param name="memDb">The memory db instance.</param>
@@ -109,13 +104,7 @@ namespace OrmMock.EF6
         /// <inheritdoc />
         public TDerivedEntity Create<TDerivedEntity>() where TDerivedEntity : class, T
         {
-            if (!this.constructors.TryGetValue(typeof(TDerivedEntity), out var constructor))
-            {
-                constructor = Reflection.Constructor(typeof(TDerivedEntity));
-                this.constructors.Add(typeof(TDerivedEntity), constructor);
-            }
-
-            return (TDerivedEntity)constructor();
+            return this.memDb.Create<TDerivedEntity>();
         }
 
         /// <inheritdoc />

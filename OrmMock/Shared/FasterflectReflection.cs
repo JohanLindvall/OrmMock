@@ -21,22 +21,16 @@
 namespace OrmMock.Shared
 {
     using System;
-    using System.Collections.Generic;
-    using System.Linq;
     using System.Reflection;
     using Fasterflect;
 
     /// <summary>
-    /// Defines reflection helper methods.
+    /// Defines reflection helper methods using Fasterflect.
     /// </summary>
-    public static class Reflection
+    public class FasterflectReflection : IReflection
     {
-        /// <summary>
-        /// Gets a function that creates an object of the given type by calling its parameter-less public constructor.
-        /// </summary>
-        /// <param name="t">The type of the object to create.</param>
-        /// <returns>A function creating object of the given type.</returns>
-        public static Func<object> Constructor(Type t)
+        /// <inheritdoc />
+        public Func<object> Constructor(Type t)
         {
             var constructor = t.GetConstructor(Type.EmptyTypes);
 
@@ -50,45 +44,36 @@ namespace OrmMock.Shared
             return () => constructorDelegate();
         }
 
-        /// <summary>
-        /// Gets a function setting a specific property on an object.
-        /// </summary>
-        /// <param name="propertyInfo">The property to set.</param>
-        /// <returns></returns>
-        public static Action<object, object> Setter(PropertyInfo propertyInfo)
+        /// <inheritdoc />
+        public Action<object, object> Setter(PropertyInfo propertyInfo)
         {
             var setPropertyDelegate = propertyInfo.DeclaringType.DelegateForSetPropertyValue(propertyInfo.Name);
 
             return (obj, value) => setPropertyDelegate(obj, value);
         }
 
-        public static IList<Action<object, object>> Setters(IEnumerable<PropertyInfo> propertyInfos) => propertyInfos.Select(Setter).ToList();
-
-        public static Func<object, object> Getter(PropertyInfo propertyInfo)
+        /// <inheritdoc />
+        public Func<object, object> Getter(PropertyInfo propertyInfo)
         {
             var getPropertyDelegate = propertyInfo.DeclaringType.DelegateForGetPropertyValue(propertyInfo.Name);
 
             return obj => getPropertyDelegate(obj);
         }
 
-        public static IList<Func<object, object>> Getters(IEnumerable<PropertyInfo> propertyInfos) => propertyInfos.Select(Getter).ToList();
-
-        public static Func<object, object> Caller(Type t, string method)
+        /// <inheritdoc />
+        public Func<object, object> Caller(Type t, string method)
         {
             var callMethodDelegate = t.DelegateForCallMethod(method, Type.EmptyTypes);
 
             return obj => callMethodDelegate(obj, null);
         }
 
-        public static Func<object, object, object> Caller(Type t, Type argumentType, string method)
+        /// <inheritdoc />
+        public Func<object, object, object> Caller(Type t, Type argumentType, string method)
         {
             var callMethodDelegate = t.DelegateForCallMethod(method, argumentType);
 
             return (obj, arg) => callMethodDelegate(obj, arg);
         }
-
-        public static IList<PropertyInfo> GetPublicPropertiesWithGettersAndSetters(Type t) => t.GetProperties().Where(p => p.GetMethod != null && p.SetMethod != null).ToList();
-
-        public static bool IsNullable(PropertyInfo property) => Nullable.GetUnderlyingType(property.PropertyType) != null || property.PropertyType == typeof(string);
     }
 }

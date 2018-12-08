@@ -87,5 +87,12 @@ namespace OrmMock.MemDb
         /// <param name="keys">The primary keys of the object to retrieve.</param>
         /// <returns>An object, or null of no object with the given properties exist.</returns>
         T Get<T>(Keys keys);
+
+        /// <summary>
+        /// Creates an object of the given type.
+        /// </summary>
+        /// <typeparam name="T">The type of the object to create.</typeparam>
+        /// <returns>An object of the given type.</returns>
+        T Create<T>();
     }
 }

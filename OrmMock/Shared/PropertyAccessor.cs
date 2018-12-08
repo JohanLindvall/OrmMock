@@ -27,7 +27,7 @@ namespace OrmMock.Shared
 
     public class PropertyAccessor
     {
-        private readonly Relations relations;
+        private readonly IRelations relations;
 
         private readonly Dictionary<Type, PropertyInfo[]> propertyCache = new Dictionary<Type, PropertyInfo[]>();
 
@@ -43,180 +43,80 @@ namespace OrmMock.Shared
 
         private readonly Dictionary<Tuple<Type, Type>, Action<object>> foreignKeyClearerCache = new Dictionary<Tuple<Type, Type>, Action<object>>();
 
-        private readonly Dictionary<PropertyInfo, Action<object, bool, IList<object>>> collectionSetterCache = new Dictionary<PropertyInfo, Action<object, bool, IList<object>>>();
+        private readonly Dictionary<PropertyInfo, Action<object, IList<object>>> collectionSetterCache = new Dictionary<PropertyInfo, Action<object, IList<object>>>();
 
-        public PropertyAccessor(Relations relations)
+        private readonly Dictionary<PropertyInfo, Action<object, IList<object>>> collectionAdderCache = new Dictionary<PropertyInfo, Action<object, IList<object>>>();
+
+        private readonly IReflection reflection;
+
+        public PropertyAccessor(IRelations relations)
         {
             this.relations = relations;
+            this.reflection = new FasterflectReflection();
         }
 
-        public void SetCollection(PropertyInfo property, object o, IList<object> contents) => this.SetCollection(property, o, true, contents);
-
-        public void AddToCollection(PropertyInfo property, object o, IList<object> contents) => this.SetCollection(property, o, false, contents);
-
-        private void SetCollection(PropertyInfo property, object o, bool clear, IList<object> contents)
+        private static TResult GetOrCreate<TKey, TResult>(Dictionary<TKey, TResult> dictionary, TKey key, Func<TResult> factory)
         {
-            if (!this.collectionSetterCache.TryGetValue(property, out var collectionSetter))
+            if (!dictionary.TryGetValue(key, out var action))
             {
-                var genericArgument = property.PropertyType.GenericTypeArguments[0];
-                var interfaceType = typeof(ICollection<>).MakeGenericType(genericArgument);
-                var constructor = Reflection.Constructor(typeof(HashSet<>).MakeGenericType(genericArgument));
-                var clearer = Reflection.Caller(interfaceType, nameof(ICollection<int>.Clear));
-                var adder = Reflection.Caller(interfaceType, genericArgument, nameof(ICollection<int>.Add));
-
-                collectionSetter = (localObjects, localClear, localContents) =>
-                {
-                    var propertyValue = this.GetValue(o, property);
-                    if (propertyValue == null)
-                    {
-                        propertyValue = constructor();
-                        this.SetValue(o, property, propertyValue);
-                    }
-
-                    if (localClear)
-                    {
-                        clearer(propertyValue);
-                    }
-
-                    foreach (var item in localContents)
-                    {
-                        adder(propertyValue, item);
-                    }
-                };
-
-                this.collectionSetterCache.Add(property, collectionSetter);
+                action = factory();
+                dictionary.Add(key, action);
             }
 
-            collectionSetter(o, clear, contents);
+            return action;
+        }
+
+        public void SetCollection(PropertyInfo property, object o, IList<object> contents)
+        {
+            GetOrCreate(this.collectionSetterCache, property, () => this.reflection.CollectionSetter(property))(o, contents);
+        }
+
+        public void AddToCollection(PropertyInfo property, object o, IList<object> contents)
+        {
+            GetOrCreate(this.collectionAdderCache, property, () => this.reflection.CollectionAdder(property))(o, contents);
         }
 
         public PropertyInfo[] GetProperties(Type t)
         {
-            if (!this.propertyCache.TryGetValue(t, out var properties))
-            {
-                properties = t.GetProperties();
-
-                this.propertyCache.Add(t, properties);
-            }
-
-            return properties;
+            return GetOrCreate(this.propertyCache, t, () => ReflectionUtility.GetPublicPropertiesWithGetters(t).ToArray());
         }
 
         public object GetValue(object o, PropertyInfo property)
         {
-            if (!this.getterCache.TryGetValue(property, out var getter))
-            {
-                getter = Reflection.Getter(property);
-                this.getterCache.Add(property, getter);
-            }
-
-            return getter(o);
+            return GetOrCreate(this.getterCache, property, () => this.reflection.Getter(property))(o);
         }
 
         public void SetValue(object o, PropertyInfo property, object value)
         {
-            if (!this.setterCache.TryGetValue(property, out var setter))
-            {
-                setter = Reflection.Setter(property);
-                this.setterCache.Add(property, setter);
-            }
-
-            setter(o, value);
+            GetOrCreate(this.setterCache, property, () => this.reflection.Setter(property))(o, value);
         }
 
         public Keys GetPrimaryKeys(object o)
         {
-            var t = o.GetType();
+            var thisType = o.GetType();
 
-            if (!this.keyGetterCache.TryGetValue(t, out var keyGetter))
-            {
-                var getters = Reflection.Getters(this.relations.GetPrimaryKeys(t));
-
-                keyGetter = local => new Keys(getters.Select(g => g(local)).ToArray());
-
-                this.keyGetterCache.Add(t, keyGetter);
-            }
-
-            return keyGetter(o);
+            return GetOrCreate(this.keyGetterCache, thisType, () => this.reflection.PrimaryKeyGetter(this.relations, thisType))(o);
         }
 
         public Keys GetForeignKeys(object o, Type foreignType)
         {
             var thisType = o.GetType();
 
-            var key = Tuple.Create(thisType, foreignType);
-
-            if (!this.foreignKeyGetterCache.TryGetValue(key, out var keyGetter))
-            {
-                var getters = Reflection.Getters(this.relations.GetForeignKeys(thisType, foreignType));
-
-                keyGetter = local => new Keys(getters.Select(g => g(local)).ToArray());
-
-                this.foreignKeyGetterCache.Add(key, keyGetter);
-            }
-
-            return keyGetter(o);
+            return GetOrCreate(this.foreignKeyGetterCache, Tuple.Create(thisType, foreignType), () => this.reflection.ForeignKeyGetter(this.relations, thisType, foreignType))(o);
         }
 
         public void SetForeignKeys(object o, Type foreignType, Keys foreignKeys)
         {
             var thisType = o.GetType();
 
-            var key = Tuple.Create(thisType, foreignType);
-
-            if (!this.foreignKeySetterCache.TryGetValue(key, out var keySetter))
-            {
-                var setters = Reflection.Setters(this.relations.GetForeignKeys(thisType, foreignType));
-
-                keySetter = (local, keys) =>
-                {
-                    if (setters.Count != 0 && setters.Count != keys.Data.Length)
-                    {
-                        throw new InvalidOperationException("Setters and keys must be of equal length.");
-                    }
-
-                    for (var i = 0; i < setters.Count; ++i)
-                    {
-                        setters[i](local, keys.Data[i]);
-                    }
-                };
-
-                this.foreignKeySetterCache.Add(key, keySetter);
-            }
-
-
-            keySetter(o, foreignKeys);
+            GetOrCreate(this.foreignKeySetterCache, Tuple.Create(thisType, foreignType), () => this.reflection.ForeignKeySetter(this.relations, thisType, foreignType))(o, foreignKeys);
         }
 
         public void ClearForeignKeys(object o, Type foreignType)
         {
             var thisType = o.GetType();
 
-            var key = Tuple.Create(thisType, foreignType);
-
-            if (!this.foreignKeyClearerCache.TryGetValue(key, out var clearer))
-            {
-                var foreignKeys = this.relations.GetForeignKeys(thisType, foreignType);
-
-                if (foreignKeys.Any(fk => !Reflection.IsNullable(fk)))
-                {
-                    throw new InvalidOperationException("Not all keys are nullable.");
-                }
-
-                var setters = Reflection.Setters(foreignKeys);
-
-                clearer = toClear =>
-                {
-                    foreach (var setter in setters)
-                    {
-                        setter(toClear, null);
-                    }
-                };
-
-                this.foreignKeyClearerCache.Add(key, clearer);
-            }
-
-            clearer(o);
+            GetOrCreate(this.foreignKeyClearerCache, Tuple.Create(thisType, foreignType), () => this.reflection.ForeignKeyClearer(this.relations, thisType, foreignType))(o);
         }
     }
 }

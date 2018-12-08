@@ -29,7 +29,7 @@ namespace OrmMock.Shared
     /// <summary>
     /// Defines relations for objects, including primary keys and foreign keys.
     /// </summary>
-    public class Relations
+    public class Relations : IRelations, IRelationsCustomization
     {
         /// <summary>
         /// Holds the dictionary of types to key properties
@@ -67,12 +67,9 @@ namespace OrmMock.Shared
         /// </summary>
         public Func<Type, Type, PropertyInfo[]> DefaultForeignKey { get; set; }
 
-        /// <summary>
-        /// Registers an expression defining the primary keys of an object.
-        /// </summary>
-        /// <typeparam name="T">The type of the object.</typeparam>
-        /// <param name="expression">The expression defining the primary keys.</param>
-        public Relations RegisterPrimaryKey<T>(Expression<Func<T, object>> expression)
+        /// <inheritdoc />
+
+        public IRelationsCustomization RegisterPrimaryKey<T>(Expression<Func<T, object>> expression)
             where T : class
         {
             this.primaryKeys.Add(typeof(T), ExpressionUtility.GetPropertyInfo(expression));
@@ -80,25 +77,15 @@ namespace OrmMock.Shared
             return this;
         }
 
-        /// <summary>
-        /// Registers an expression defining the foreign keys of an object.
-        /// </summary>
-        /// <typeparam name="TThis">The type of the object.</typeparam>
-        /// <typeparam name="TForeign">The type of the foreign object.</typeparam>
-        /// <typeparam name="TKey">The type of the key property.</typeparam>
-        /// <param name="expression">The expression defining the foreign keys.</param>
-        public Relations RegisterForeignKeys<TThis, TForeign, TKey>(Expression<Func<TThis, TKey>> expression)
+        /// <inheritdoc />
+
+        public IRelationsCustomization RegisterForeignKeys<TThis, TForeign, TKey>(Expression<Func<TThis, TKey>> expression)
         {
             return this.RegisterForeignKeys<TThis, TForeign>(ExpressionUtility.GetPropertyInfo(expression));
         }
 
-        /// <summary>
-        /// Registers an expression defining the foreign keys of an object.
-        /// </summary>
-        /// <typeparam name="TThis">The type of the object.</typeparam>
-        /// <typeparam name="TForeign">The type of the foreign object.</typeparam>
-        /// <param name="keys">The foreign keys.</param>
-        public Relations RegisterForeignKeys<TThis, TForeign>(PropertyInfo[] keys)
+        /// <inheritdoc />
+        public IRelationsCustomization RegisterForeignKeys<TThis, TForeign>(PropertyInfo[] keys)
         {
             this.ValidateForeignKeys(typeof(TThis), typeof(TForeign), keys);
 
@@ -107,12 +94,8 @@ namespace OrmMock.Shared
             return this;
         }
 
-        /// <summary>
-        /// Registers an empty set of foreign keys for the given relation.
-        /// </summary>
-        /// <typeparam name="TThis">The type of the object.</typeparam>
-        /// <typeparam name="TForeign">The type of the foreign object.</typeparam>
-        public Relations RegisterNullForeignKeys<TThis, TForeign>()
+        /// <inheritdoc />
+        public IRelationsCustomization RegisterNullForeignKeys<TThis, TForeign>()
         {
             // Bypass validation of foreign keys and primary keys
             this.foreignKeys.Add(new Tuple<Type, Type>(typeof(TThis), typeof(TForeign)), new PropertyInfo[0]);
@@ -120,14 +103,8 @@ namespace OrmMock.Shared
             return this;
         }
 
-        /// <summary>
-        /// Registers a 1:1 relation between TThis and TForeign.
-        /// </summary>
-        /// <typeparam name="TThis">The first object type.</typeparam>
-        /// <typeparam name="TForeign">The second object type.</typeparam>
-        /// <param name="expression1">The expression defining the foreign keys of the first object.</param>
-        /// <param name="expression2">The expression defining the foreign keys of the second object.</param>
-        public Relations Register11Relation<TThis, TForeign>(Expression<Func<TThis, object>> expression1, Expression<Func<TForeign, object>> expression2)
+        /// <inheritdoc />
+        public IRelationsCustomization Register11Relation<TThis, TForeign>(Expression<Func<TThis, object>> expression1, Expression<Func<TForeign, object>> expression2)
         {
             this.RegisterForeignKeys<TThis, TForeign, object>(expression1);
             this.RegisterForeignKeys<TForeign, TThis, object>(expression2);
@@ -135,11 +112,7 @@ namespace OrmMock.Shared
             return this;
         }
 
-        /// <summary>
-        /// Gets the primary key properties for a given type.
-        /// </summary>
-        /// <param name="t">The type of the object.</param>
-        /// <returns></returns>
+        /// <inheritdoc />
         public PropertyInfo[] GetPrimaryKeys(Type t)
         {
             if (!this.primaryKeys.TryGetValue(t, out var result))
@@ -157,12 +130,7 @@ namespace OrmMock.Shared
             return result;
         }
 
-        /// <summary>
-        /// Gets the primary key properties for a given type.
-        /// </summary>
-        /// <param name="tThis">The type of this object.</param>
-        /// <param name="tForeign">The type of the foreign object.</param>
-        /// <returns></returns>
+        /// <inheritdoc />
         public PropertyInfo[] GetForeignKeys(Type tThis, Type tForeign)
         {
             var key = new Tuple<Type, Type>(tThis, tForeign);
