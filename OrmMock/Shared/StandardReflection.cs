@@ -25,16 +25,14 @@ namespace OrmMock.Shared
 
     class StandardReflection : IReflection
     {
-        public Func<object> Constructor(Type t) => () => Activator.CreateInstance(t);
+        public Func<object> Constructor(Type t) => () => t.GetConstructor(Type.EmptyTypes)?.Invoke(new object[0]) ?? throw new InvalidOperationException();
 
         public Action<object, object> Setter(PropertyInfo propertyInfo) => propertyInfo.SetValue;
 
         public Func<object, object> Getter(PropertyInfo propertyInfo) => propertyInfo.GetValue;
 
-        // ReSharper disable once PossibleNullReferenceException
-        public Func<object, object> Caller(Type resultType, string method) => o => o.GetType().GetMethod(method, Type.EmptyTypes).Invoke(o, new object[0]);
+        public Func<object, object> Caller(Type resultType, string method) => o => o.GetType().GetMethod(method, Type.EmptyTypes)?.Invoke(o, new object[0]) ?? throw new InvalidOperationException();
 
-        // ReSharper disable once PossibleNullReferenceException
-        public Func<object, object, object> Caller(Type resultType, Type argumentType, string method) => (o, a) => o.GetType().GetMethod(method, new[] { argumentType }).Invoke(o, new[] { a });
+        public Func<object, object, object> Caller(Type resultType, Type argumentType, string method) => (o, a) => o.GetType().GetMethod(method, new[] { argumentType })?.Invoke(o, new[] { a }) ?? throw new InvalidOperationException();
     }
 }

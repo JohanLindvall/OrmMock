@@ -56,7 +56,17 @@ namespace OrmMock.Shared
         {
             var getters = reflection.Getters(propertyInfos);
 
-            return local => new Keys(getters.Select(getter => getter(local)).ToArray());
+            return local =>
+            {
+                // Avoid LINQ, too slow.
+                var arr = new object[getters.Count];
+                for (var i = 0; i < arr.Length; ++i)
+                {
+                    arr[i] = getters[i](local);
+                }
+
+                return new Keys(arr);
+            };
         }
 
         /// <summary>
