@@ -359,7 +359,7 @@ namespace OrmMock.MemDb
 
         private Keys GetForeignKeys(object o, Type foreignType) => this.memoization.Get(nameof(this.GetForeignKeys), o.GetType(), foreignType, () => this.reflection.ForeignKeyGetter(this.Relations, o.GetType(), foreignType))(o);
 
-        private void SetCollection(object o, PropertyInfo pi, IList<object> values) => this.memoization.Get(nameof(this.SetCollection), pi, () => this.reflection.CollectionSetter(pi))(o, values);
+        private void SetCollection(object o, PropertyInfo pi, IList<object> values) => this.memoization.Get(nameof(this.SetCollection), pi, () => this.reflection.CollectionSetter(pi, typeof(HashSet<>)))(o, values);
 
         private void SetForeignKeys(object o, Type foreignType, Keys keys) => this.memoization.Get(nameof(this.SetForeignKeys), o.GetType(), foreignType, () => this.reflection.ForeignKeySetter(this.Relations, o.GetType(), foreignType))(o, keys);
 

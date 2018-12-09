@@ -256,6 +256,26 @@ namespace Test
         }
 
         [Test]
+        public void TestNullableInclude()
+        {
+            this.dataGenerator.For<TestNullable1>().With(e => e.Nullable2);
+            var result = this.dataGenerator.Create<TestNullable1>();
+
+            Assert.IsNotNull(result.Nullable2);
+            Assert.AreEqual(result.Nullable2Id.Value, result.Nullable2.Id);
+        }
+
+        [Test]
+        public void TestNullableExclude()
+        {
+            this.dataGenerator.For<TestNullable1>().Without(e => e.Nullable2);
+            var result = this.dataGenerator.Create<TestNullable1>();
+
+            Assert.IsNull(result.Nullable2);
+            Assert.IsNull(result.Nullable2Id);
+        }
+
+        [Test]
         public void TestSingleton()
         {
             this.dataGenerator.For<TestClass2>()

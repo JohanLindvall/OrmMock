@@ -122,25 +122,28 @@ namespace OrmMock.Shared
         /// </summary>
         /// <param name="reflection">The IReflection instance.</param>
         /// <param name="propertyInfo">The property info.</param>
+        /// <param name="defaultCollectionType">The default collection type to use if a new collection needs to be created.</param>
         /// <returns>A function object setting the contents of the collection to the given list of items.</returns>
-        public static Action<object, IList<object>> CollectionSetter(this IReflection reflection, PropertyInfo propertyInfo) => reflection.CollectionSetter(propertyInfo, true);
+        public static Action<object, IList<object>> CollectionSetter(this IReflection reflection, PropertyInfo propertyInfo, Type defaultCollectionType) => reflection.CollectionSetter(propertyInfo, defaultCollectionType, true);
 
         /// <summary>
         /// Creates a function adding the list of items to the ICollection of the given property.
         /// </summary>
         /// <param name="reflection">The IReflection instance.</param>
         /// <param name="propertyInfo">The property info.</param>
+        /// <param name="defaultCollectionType">The default collection type to use if a new collection needs to be created.</param>
         /// <returns>A function object setting the contents of the collection to the given list of items.</returns>
-        public static Action<object, IList<object>> CollectionAdder(this IReflection reflection, PropertyInfo propertyInfo) => reflection.CollectionSetter(propertyInfo, false);
+        public static Action<object, IList<object>> CollectionAdder(this IReflection reflection, PropertyInfo propertyInfo, Type defaultCollectionType) => reflection.CollectionSetter(propertyInfo, defaultCollectionType, false);
 
         /// <summary>
         /// Creates a function setting the contents of the ICollection of the given property to the list of items.
         /// </summary>
         /// <param name="reflection">The IReflection instance.</param>
         /// <param name="propertyInfo">The property info.</param>
+        /// <param name="defaultCollectionType">The default collection type to use if a new collection needs to be created.</param>
         /// <param name="clear">Determines if the collection should be cleared.</param>
         /// <returns>A function object setting the contents of the collection to the given list of items.</returns>
-        public static Action<object, IList<object>> CollectionSetter(this IReflection reflection, PropertyInfo propertyInfo, bool clear)
+        public static Action<object, IList<object>> CollectionSetter(this IReflection reflection, PropertyInfo propertyInfo, Type defaultCollectionType, bool clear)
         {
             var genericArgument = propertyInfo.PropertyType.GenericTypeArguments[0];
             var interfaceType = typeof(ICollection<>).MakeGenericType(genericArgument);
@@ -149,10 +152,10 @@ namespace OrmMock.Shared
                 throw new InvalidOperationException($@"Only collections based on ICollection<> are supported.");
             }
 
-            var constructor = reflection.Constructor(typeof(HashSet<>).MakeGenericType(genericArgument));
+            var constructor = reflection.Constructor(defaultCollectionType.MakeGenericType(genericArgument));
             var adder = reflection.Caller(interfaceType, genericArgument, nameof(ICollection<int>.Add));
             var clearer = clear ? reflection.Caller(interfaceType, nameof(ICollection<int>.Clear)) : null;
-            var setValue = ReflectionUtility.CanSetProperty(propertyInfo) ? reflection.Setter(propertyInfo) : null;
+            var setValue = ReflectionUtility.HasSetter(propertyInfo) ? reflection.Setter(propertyInfo) : null;
             var getValue = reflection.Getter(propertyInfo);
 
             return (o, list) =>

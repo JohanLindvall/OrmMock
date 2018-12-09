@@ -379,11 +379,6 @@ namespace OrmMock.DataGenerator
             return null;
         }
 
-
-        private static bool IsPlainProperty(PropertyInfo p) => !p.PropertyType.IsClass && !p.PropertyType.IsInterface || ReflectionUtility.IsNullableOrString(p);
-
-        private static bool IsReferenceProperty(PropertyInfo p) => p.PropertyType.IsClass && !p.PropertyType.IsGenericType && !ReflectionUtility.IsNullableOrString(p);
-
         /// <summary>
         /// Sets properties for the given input object, with the specified type.
         /// </summary>
@@ -397,13 +392,13 @@ namespace OrmMock.DataGenerator
             {
                 methods = new List<Action<object, IList<object>, bool>>();
 
-                var propertiesToSet = ReflectionUtility.GetPublicPropertiesWithGettersAndSetters(inputType).Where(p => !this.customization.ShouldSkip(p)).ToList();
+                var allProperties = ReflectionUtility.GetPublicPropertiesWithGettersAndSetters(inputType);
                 var pkProperties = this.Relations.GetPrimaryKeys(inputType);
                 var pkPropertiesDict = new HashSet<PropertyInfo>(pkProperties);
-                var fkDict = propertiesToSet.Where(IsReferenceProperty).ToDictionary(p => p, p => this.Relations.GetForeignKeys(inputType, p.PropertyType));
+                var fkDict = allProperties.Where(ReflectionUtility.IsNonGenericReferenceType).ToDictionary(p => p, p => this.Relations.GetForeignKeys(inputType, p.PropertyType));
                 var first11Property = fkDict.SingleOrDefault(kvp => kvp.Value.SequenceEqual(pkProperties)).Key;
                 var fkPropertiesDict = new HashSet<PropertyInfo>(fkDict.Values.SelectMany(v => v));
-                propertiesToSet = propertiesToSet.Where(p => pkPropertiesDict.Contains(p) || !fkPropertiesDict.Contains(p)).ToList(); // Remove foreign keys (keep primary keys)
+                var propertiesToSet = allProperties.Where(p => !this.customization.ShouldSkip(p)).Where(p => pkPropertiesDict.Contains(p) || !fkPropertiesDict.Contains(p)).ToList(); // Remove foreign keys (keep primary keys)
 
                 var creatorDict = propertiesToSet.ToDictionary(p => p, p =>
                 {
@@ -421,7 +416,7 @@ namespace OrmMock.DataGenerator
                 });
 
                 // Set plain properties (without references)
-                foreach (var property in propertiesToSet.Where(IsPlainProperty))
+                foreach (var property in propertiesToSet.Where(ReflectionUtility.IsValueTypeOrNullableOrString))
                 {
                     if (creatorDict.TryGetValue(property, out var valueFunc))
                     {
@@ -455,7 +450,7 @@ namespace OrmMock.DataGenerator
                     });
                 }
 
-                foreach (var property in propertiesToSet.Where(p => !IsPlainProperty(p)))
+                foreach (var property in propertiesToSet.Where(p => !ReflectionUtility.IsValueTypeOrNullableOrString(p)))
                 {
                     var propertyType = property.PropertyType;
                     creatorDict.TryGetValue(property, out var propertyValueCreator);
@@ -465,7 +460,7 @@ namespace OrmMock.DataGenerator
                     if (propertyType.IsGenericType)
                     {
                         var elementType = propertyType.GetGenericArguments()[0];
-                        var adder = this.reflection.CollectionAdder(property); // will fail if generic type is not based on ICollection<>
+                        var adder = this.reflection.CollectionAdder(property, typeof(HashSet<>)); // will fail if generic type is not based on ICollection<>
 
                         methods.Add((currentObject, currentSources, currentSingleton) =>
                         {
@@ -506,7 +501,7 @@ namespace OrmMock.DataGenerator
 
                         var pkFkEqual = foreignKeyProps.SequenceEqual(pkProperties);
 
-                        var isNullable = foreignKeyProps.Any(ReflectionUtility.IsNullableOrString); // needs customization point
+                        var isNullable = foreignKeyProps.Any(ReflectionUtility.IsNullableOrString) && this.customization.GetIncludeCount(property, 0) == 0;
                         Func<bool> determineNullable = null;
                         if (isNullable)
                         {

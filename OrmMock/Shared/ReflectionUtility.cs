@@ -30,12 +30,33 @@ namespace OrmMock.Shared
     /// </summary>
     public static class ReflectionUtility
     {
-        public static IList<PropertyInfo> GetPublicPropertiesWithGetters(Type t) => t.GetProperties().Where(p => p.GetMethod != null).ToList();
+        public static IList<PropertyInfo> GetPublicPropertiesWithGetters(Type t) => t.GetProperties().Where(HasGetter).ToList();
 
-        public static IList<PropertyInfo> GetPublicPropertiesWithGettersAndSetters(Type t) => t.GetProperties().Where(p => p.GetMethod != null && p.SetMethod != null).ToList();
+        public static IList<PropertyInfo> GetPublicPropertiesWithGettersAndSetters(Type t) => t.GetProperties().Where(p => HasGetter(p) && HasSetter(p)).ToList();
 
-        public static bool CanSetProperty(PropertyInfo property) => property.SetMethod != null;
+        public static bool HasSetter(PropertyInfo property) => property.SetMethod != null;
 
+        public static bool HasGetter(PropertyInfo property) => property.GetMethod != null;
+
+        /// <summary>
+        /// Returns true if the property is a nullable value type or string.
+        /// </summary>
+        /// <param name="property">The property to check.</param>
+        /// <returns>True if the property is a nullable value type or string, false otherwise.</returns>
         public static bool IsNullableOrString(PropertyInfo property) => Nullable.GetUnderlyingType(property.PropertyType) != null || property.PropertyType == typeof(string);
+
+        /// <summary>
+        /// Returns true if the property type is a value type, or a nullable value type or string.
+        /// </summary>
+        /// <param name="property">The property to check.</param>
+        /// <returns>True if the property type is value type, false otherwise.</returns>
+        public static bool IsValueTypeOrNullableOrString(PropertyInfo property) => property.PropertyType.IsValueType || ReflectionUtility.IsNullableOrString(property);
+
+        /// <summary>
+        /// Returns true if the property type is a non-generic reference type (but not nullable or string)
+        /// </summary>
+        /// <param name="property">The property to check.</param>
+        /// <returns>True if the property type is reference type, false otherwise.</returns>
+        public static bool IsNonGenericReferenceType(PropertyInfo property) => property.PropertyType.IsClass && !property.PropertyType.IsGenericType && !ReflectionUtility.IsNullableOrString(property);
     }
 }

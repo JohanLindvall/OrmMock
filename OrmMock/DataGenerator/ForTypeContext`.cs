@@ -124,6 +124,16 @@ namespace OrmMock.DataGenerator
         }
 
         /// <summary>
+        /// Makes sure that a nullable property is always set to a value.
+        /// </summary>
+        /// <param name="e">The property expression.</param>
+        /// <returns>The generator.</returns>
+        public ForTypeContext<T> With(Expression<Func<T, object>> e)
+        {
+            return this.ForEach(e, pi => { this.customization.SetIncludeCount(pi, 1); });
+        }
+
+        /// <summary>
         /// Sets a property to a specific value.
         /// </summary>
         /// <param name="e">The property expression.</param>
