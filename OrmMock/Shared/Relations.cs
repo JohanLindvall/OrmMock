@@ -117,14 +117,7 @@ namespace OrmMock.Shared
         {
             if (!this.primaryKeys.TryGetValue(t, out var result))
             {
-                result = this.DefaultPrimaryKey(t);
-
-                if (result == null)
-                {
-                    throw new InvalidOperationException($@"Unable to determine key for type '{t.Name}'.");
-                }
-
-                this.primaryKeys.Add(t, result);
+                result = this.DefaultPrimaryKey(t) ?? new PropertyInfo[0];
             }
 
             return result;
@@ -137,16 +130,9 @@ namespace OrmMock.Shared
 
             if (!this.foreignKeys.TryGetValue(key, out var result))
             {
-                result = this.DefaultForeignKey(tThis, tForeign);
-
-                if (result == null)
-                {
-                    throw new InvalidOperationException($@"Unable to determine foreign keys from '{tThis.Name}' to '{tForeign.Name}'.");
-                }
+                result = this.DefaultForeignKey(tThis, tForeign) ?? new PropertyInfo[0];
 
                 this.ValidateForeignKeys(tThis, tForeign, result);
-
-                this.foreignKeys.Add(key, result);
             }
 
             return result;

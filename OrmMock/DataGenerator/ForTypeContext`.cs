@@ -84,7 +84,7 @@ namespace OrmMock.DataGenerator
         /// <returns>The typed context.</returns>
         public ForTypeContext<T> With(Func<string, T> creator)
         {
-            this.customization.SetLookbackCount(typeof(T), 0);
+            this.customization.SetLookBackCount(typeof(T), 0);
             this.customization.SetCustomConstructor(typeof(T), (_, s) => creator(s));
 
             return this;
@@ -144,7 +144,7 @@ namespace OrmMock.DataGenerator
         {
             return this.ForEach(e, pi =>
             {
-                this.customization.SetLookbackCount(pi, 0);
+                this.customization.SetLookBackCount(pi, 0);
                 this.customization.SetPropertySetter(pi, ctx => value(ctx));
             });
         }
@@ -175,25 +175,52 @@ namespace OrmMock.DataGenerator
         public ForTypeContext<T> Without(IList<PropertyInfo> properties) => this.ForEach(properties, this.customization.Skip);
 
         /// <summary>
-        /// Excludes a property from being set. The default value will be used.
+        /// Registers an action to be performed after an object of the given type is created.
         /// </summary>
+        /// <param name="action">The action to perform.</param>
         /// <returns>The type context.</returns>
-        public ForTypeContext<T> SetLookback(Expression<Func<T, object>> e, int lookback) => this.ForEach(e, pi => this.customization.SetLookbackCount(pi, lookback));
+        public ForTypeContext<T> PostCreate(Action<T> action)
+        {
+            this.customization.PostCreate(action);
+            return this;
+        }
+
+        /// <summary>
+        /// Registers an action to be performed after the given property on the given type is set.
+        /// </summary>
+        /// <param name="e">The property expression.</param>
+        /// <param name="action">The action to perform.</param>
+        /// <returns>The type context.</returns>
+        public ForTypeContext<T> PostCreate(Expression<Func<T, object>> e, Action<T> action)
+        {
+            this.ForEach(e, pi => this.customization.PostCreate(pi, action));
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the look-back count for a given property..
+        /// </summary>
+        /// <param name="e">The property expression.</param>
+        /// <param name="lookBack">The look-back count.</param>
+        /// <returns>The type context.</returns>
+        public ForTypeContext<T> SetLookBack(Expression<Func<T, object>> e, int lookBack) => this.ForEach(e, pi => this.customization.SetLookBackCount(pi, lookBack));
 
         /// <summary>
         /// Excludes a property from being set. The default value will be used.
         /// </summary>
+        /// <param name="properties">The list of properties.</param>
+        /// <param name="lookBack">The look-back count.</param>
         /// <returns>The type context.</returns>
-        public ForTypeContext<T> SetLookback(IList<PropertyInfo> properties, int lookback) => this.ForEach(properties, pi => this.customization.SetLookbackCount(pi, lookback));
+        public ForTypeContext<T> SetLookBack(IList<PropertyInfo> properties, int lookBack) => this.ForEach(properties, pi => this.customization.SetLookBackCount(pi, lookBack));
 
         /// <summary>
         /// Sets the look-back count for the given type.
         /// </summary>
         /// <param name="count">The number of look-back levels.</param>
         /// <returns>The type context.</returns>
-        public ForTypeContext<T> SetLookback(int count)
+        public ForTypeContext<T> SetLookBack(int count)
         {
-            this.customization.SetLookbackCount(typeof(T), count);
+            this.customization.SetLookBackCount(typeof(T), count);
             return this;
         }
 

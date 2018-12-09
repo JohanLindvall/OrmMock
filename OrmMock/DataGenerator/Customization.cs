@@ -120,29 +120,49 @@ namespace OrmMock.DataGenerator
         }
 
         /// <summary>
-        /// Gets the lookback count for the given type.
+        /// Register a post-create action to be performed once an object of the given type has been created.
+        /// </summary>
+        /// <typeparam name="T">The type of the object.</typeparam>
+        /// <param name="action">The post-create action.</param>
+        public void PostCreate<T>(Action<T> action)
+        {
+            this.GetOrAdd(typeof(T)).PostCreate = o => action((T)o);
+        }
+
+        /// <summary>
+        /// Register a post-create action to be performed once an object of the given type has been created.
+        /// </summary>
+        /// <param name="pi">The property info.</param>
+        /// <param name="action">The post-create action.</param>
+        public void PostCreate<T>(PropertyInfo pi, Action<T> action)
+        {
+            this.GetOrAdd(pi).PostCreate = o => action((T)o);
+        }
+
+        /// <summary>
+        /// Gets the look-back count for the given type.
         /// </summary>
         /// <param name="type">The type of the property.</param>
-        /// <param name="defaultLookback">The default lookback count.</param>
-        /// <returns>The lookback count</returns>
-        public int GetLookbackCount(Type type, int defaultLookback)
+        /// <param name="defaultLookBackCount">The default look-back count.</param>
+        /// <returns>The look-back count</returns>
+        public int GetLookBackCount(Type type, int defaultLookBackCount)
         {
-            return this.Get(type)?.LookbackCount ?? this.ancestor?.Get(type)?.LookbackCount ?? defaultLookback;
+            return this.Get(type)?.LookBackCount ?? this.ancestor?.Get(type)?.LookBackCount ?? defaultLookBackCount;
         }
 
-        public void SetLookbackCount(Type type, int lookbackCount)
+        public void SetLookBackCount(Type type, int lookBackCount)
         {
-            this.GetOrAdd(type).LookbackCount = lookbackCount;
+            this.GetOrAdd(type).LookBackCount = lookBackCount;
         }
 
-        public int GetLookbackCount(PropertyInfo property, int defaultLookbackCount)
+        public int GetLookBackCount(PropertyInfo property, int defaultLookBackCount)
         {
-            return this.Get(property)?.LookbackCount ?? this.Get(property.PropertyType)?.LookbackCount ?? this.ancestor?.GetLookbackCount(property, defaultLookbackCount) ?? defaultLookbackCount;
+            return this.Get(property)?.LookBackCount ?? this.Get(property.PropertyType)?.LookBackCount ?? this.ancestor?.GetLookBackCount(property, defaultLookBackCount) ?? defaultLookBackCount;
         }
 
-        public void SetLookbackCount(PropertyInfo property, int lookbackCount)
+        public void SetLookBackCount(PropertyInfo property, int lookBackCount)
         {
-            this.GetOrAdd(property).LookbackCount = lookbackCount;
+            this.GetOrAdd(property).LookBackCount = lookBackCount;
         }
 
         public void SetPropertySetter(PropertyInfo property, Func<DataGenerator, object> setter)
@@ -175,6 +195,16 @@ namespace OrmMock.DataGenerator
         public Func<DataGenerator, string, object> GetCustomConstructor(Type type)
         {
             return this.Get(type)?.Constructor ?? this.ancestor?.GetCustomConstructor(type);
+        }
+
+        public Action<object> GetPostCreateAction(Type type)
+        {
+            return this.Get(type)?.PostCreate ?? this.ancestor?.GetPostCreateAction(type);
+        }
+
+        public Action<object> GetPostCreateAction(PropertyInfo pi)
+        {
+            return this.Get(pi)?.PostCreate ?? this.ancestor?.GetPostCreateAction(pi);
         }
 
         public void RegisterSingleton(Type t)
@@ -229,9 +259,11 @@ namespace OrmMock.DataGenerator
 
             public bool? Skip { get; set; }
 
-            public int? LookbackCount { get; set; }
+            public int? LookBackCount { get; set; }
 
             public Func<DataGenerator, string, object> Constructor { get; set; }
+
+            public Action<object> PostCreate { get; set; }
         }
 
         private class PropertyCustomization
@@ -240,9 +272,11 @@ namespace OrmMock.DataGenerator
 
             public bool? Skip { get; set; }
 
-            public int? LookbackCount { get; set; }
+            public int? LookBackCount { get; set; }
 
             public Func<DataGenerator, object> CustomValue { get; set; }
+
+            public Action<object> PostCreate { get; set; }
         }
     }
 }

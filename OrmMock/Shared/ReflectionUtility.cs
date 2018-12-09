@@ -36,6 +36,6 @@ namespace OrmMock.Shared
 
         public static bool CanSetProperty(PropertyInfo property) => property.SetMethod != null;
 
-        public static bool IsNullable(PropertyInfo property) => Nullable.GetUnderlyingType(property.PropertyType) != null || property.PropertyType == typeof(string);
+        public static bool IsNullableOrString(PropertyInfo property) => Nullable.GetUnderlyingType(property.PropertyType) != null || property.PropertyType == typeof(string);
     }
 }

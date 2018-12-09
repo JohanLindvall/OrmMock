@@ -411,5 +411,26 @@ namespace Test
 
             var a = this.dataGenerator.Create<SimpleClass2>();
         }
+
+        [Test]
+        public void TestPostCreate()
+        {
+            this.dataGenerator.For<SimpleClass>().PostCreate(s => s.Prop2 = "hello");
+
+            var sc = this.dataGenerator.Create<SimpleClass>();
+
+            Assert.AreEqual("hello", sc.Prop2);
+        }
+
+        [Test]
+        public void TestPostCreateProperty()
+        {
+            var count = 0;
+            this.dataGenerator.For<SimpleClass>().PostCreate(s => new { s.Prop1, s.Prop2 }, _ => ++count);
+
+            var sc = this.dataGenerator.Create<SimpleClass>();
+
+            Assert.AreEqual(2, count);
+        }
     }
 }

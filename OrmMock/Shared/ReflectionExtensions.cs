@@ -101,7 +101,7 @@ namespace OrmMock.Shared
         /// <returns>A function object setting the properties to null.</returns>
         public static Action<object> PropertyClearer(this IReflection reflection, IList<PropertyInfo> propertyInfos)
         {
-            if (propertyInfos.Any(fk => !ReflectionUtility.IsNullable(fk)))
+            if (propertyInfos.Any(fk => !ReflectionUtility.IsNullableOrString(fk)))
             {
                 throw new InvalidOperationException("Not all properties are nullable.");
             }
