@@ -18,12 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 namespace OrmMock.EF6.Test
 {
     using MemDb;
     using NSubstitute;
     using NUnit.Framework;
+    using Shared;
+
     using System;
     using System.Collections.Generic;
     using System.Data.Entity;
@@ -51,6 +52,7 @@ namespace OrmMock.EF6.Test
             this.memDb = Substitute.For<IMemDb>();
 
             this.memDb.Get<TestObject>().Returns(_ => this.testObjects);
+            this.memDb.Get<TestObject>(Arg.Any<Keys>()).Returns(ci => this.testObjects.SingleOrDefault(t => t.Name == ci.Arg<Keys>().Data[0] as string));
 
             this.set = this.memDb.DbSet<TestObject>();
         }
@@ -71,6 +73,14 @@ namespace OrmMock.EF6.Test
             Assert.AreEqual(1, data.Count);
 
             this.memDb.Received(2).Get<TestObject>();
+        }
+
+        [Test]
+        public async Task TestFindAsync()
+        {
+            var data = await this.set.FindAsync("foo");
+            Assert.AreEqual("foo", data.Name);
+            this.memDb.Received(1).Get<TestObject>(Arg.Any<Keys>());
         }
 
         public class TestObject

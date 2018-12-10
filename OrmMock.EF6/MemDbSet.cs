@@ -39,7 +39,7 @@ namespace OrmMock.EF6
     /// Implements a MemDbSet.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class MemDbSet<T> : IDbSet<T>
+    public class MemDbSet<T> : DbSet<T>, IDbSet<T>, IQueryable<T>, IEnumerable<T>, IQueryable, IEnumerable
         where T : class
     {
         /// <summary>
@@ -77,10 +77,16 @@ namespace OrmMock.EF6
         public IQueryProvider Provider => new MemDbAsyncQueryProvider<T>(this.Queryable().Provider);
 
         /// <inheritdoc />
-        public T Find(params object[] keyValues) => this.memDb.Get<T>(new Keys(keyValues));
+        public override T Find(params object[] keyValues) => this.memDb.Get<T>(new Keys(keyValues));
 
         /// <inheritdoc />
-        public T Add(T entity)
+        public override Task<T> FindAsync(CancellationToken cancellationToken, params object[] keyValues) => Task.FromResult(this.Find(keyValues));
+
+        /// <inheritdoc />
+        public override Task<T> FindAsync(params object[] keyValues) => Task.FromResult(this.Find(keyValues));
+
+        /// <inheritdoc />
+        public override T Add(T entity)
         {
             this.memDb.Add(entity);
 
@@ -88,7 +94,7 @@ namespace OrmMock.EF6
         }
 
         /// <inheritdoc />
-        public T Remove(T entity)
+        public override T Remove(T entity)
         {
             this.memDb.Remove(entity);
 
@@ -96,19 +102,19 @@ namespace OrmMock.EF6
         }
 
         /// <inheritdoc />
-        public T Attach(T entity) => entity; // no-op.
+        public override T Attach(T entity) => entity; // no-op.
 
         /// <inheritdoc />
-        public T Create() => this.Create<T>();
+        public override T Create() => this.Create<T>();
 
         /// <inheritdoc />
-        public TDerivedEntity Create<TDerivedEntity>() where TDerivedEntity : class, T
+        public override TDerivedEntity Create<TDerivedEntity>()
         {
             return this.memDb.Create<TDerivedEntity>();
         }
 
         /// <inheritdoc />
-        public ObservableCollection<T> Local { get; }
+        public override ObservableCollection<T> Local { get; }
 
         /// <summary>
         /// Seeds initial data. Called by reflection. Do not remove.
@@ -116,7 +122,7 @@ namespace OrmMock.EF6
         /// <param name="values">The initial seed values.</param>
         public void AddOrUpdate(params T[] values)
         {
-            foreach (var remove in this.memDb.Get<T>())
+            foreach (var remove in this.memDb.Get<T>().ToList())
             {
                 this.memDb.Remove(remove);
             }
@@ -127,6 +133,8 @@ namespace OrmMock.EF6
             {
                 this.Add(add);
             }
+
+            this.memDb.Commit();
         }
 
         /// <summary>

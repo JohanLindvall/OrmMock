@@ -292,7 +292,7 @@ namespace OrmMock.MemDb
 
                 foreach (var property in this.GetProperties(root))
                 {
-                    if (this.GetValue(root, property) is IEnumerable enumerable)
+                    if (ReflectionUtility.IsCollectionType(property.PropertyType) && this.GetValue(root, property) is IEnumerable enumerable)
                     {
                         foreach (var collectionItem in enumerable)
                         {
