@@ -94,6 +94,21 @@ namespace Test
             public int Auto { get; set; }
         }
 
+
+        public class TestClass6
+        {
+            public virtual TestClass7 Class7 { get; set; }
+
+            public int Class7Id { get; set; }
+        }
+
+        public class TestClass7
+        {
+            public int Id { get; set; }
+
+            public ICollection<TestClass6> Class6 { get; set; }
+        }
+
         private MemDb db;
 
         [SetUp]
@@ -334,6 +349,73 @@ namespace Test
 
             Assert.AreEqual(1, s1.Auto);
             Assert.AreEqual(2, s2.Auto);
+        }
+
+        [Test]
+        public void TestCreate()
+        {
+            var obj = db.Create<TestClass2>();
+
+            Assert.IsNotNull(obj);
+            Assert.AreEqual(typeof(TestClass2), obj.GetType());
+        }
+
+        [Test]
+        public void TestAddMany()
+        {
+            db.RegisterAutoIncrement<TestClass5>(i => i.Id);
+            db.AddMany(Enumerable.Range(0, 10).Select(_ => new TestClass5()));
+            db.Commit();
+
+            Assert.AreEqual(10, db.Count());
+        }
+
+        [Test]
+        public void TestTraverseObjectGraph()
+        {
+            var objects = db.TraverseObjectGraph(new TestClass7
+            {
+                Class6 = new List<TestClass6>
+                {
+                    new TestClass6(),
+                    new TestClass6(),
+                    new TestClass6(),
+                    new TestClass6()
+                }
+            }).ToList();
+
+            Assert.AreEqual(5, objects.Count);
+        }
+
+        [Test]
+        public void TestRemoveByKey()
+        {
+            var stored = new TestClass1 { Id = Guid.NewGuid() };
+            db.Add(stored);
+            db.Commit();
+            Assert.IsTrue(db.Remove<TestClass1>(new Keys(stored.Id)));
+            Assert.AreEqual(0, db.Count());
+        }
+
+        [Test]
+        public void TestDisconnected()
+        {
+            db.AddMany(new object[]
+            {
+                new TestClass6
+                {
+                    Class7Id = 123
+                },
+                new TestClass7
+                {
+                    Id = 123
+                }
+            });
+
+            db.Commit();
+            var obj = db.Get<TestClass6>().Single();
+
+            Assert.AreSame(obj, obj.Class7.Class6.Single());
         }
     }
 }

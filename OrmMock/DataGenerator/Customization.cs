@@ -61,16 +61,6 @@ namespace OrmMock.DataGenerator
         }
 
         /// <summary>
-        /// Returns a value indicating whether the given type should be skipped when encountered in the object graph.
-        /// </summary>
-        /// <param name="t">The type of the object.</param>
-        /// <returns></returns>
-        public bool ShouldSkip(Type t)
-        {
-            return this.Get(t)?.Skip ?? this.ancestor?.ShouldSkip(t) ?? false;
-        }
-
-        /// <summary>
         /// Skips the given type from inclusion in the object graph.
         /// </summary>
         /// <param name="t">The type of the object to skip.</param>
@@ -139,35 +129,41 @@ namespace OrmMock.DataGenerator
             this.GetOrAdd(pi).PostCreate = o => action((T)o);
         }
 
+
         /// <summary>
-        /// Gets the look-back count for the given type.
+        /// Gets the look-back count for the given property.
         /// </summary>
-        /// <param name="type">The type of the property.</param>
+        /// <param name="property">The property to get the look-back count for. Falls back tot the look-back count for the type if nothing is set for the property.</param>
         /// <param name="defaultLookBackCount">The default look-back count.</param>
         /// <returns>The look-back count</returns>
-        public int GetLookBackCount(Type type, int defaultLookBackCount)
-        {
-            return this.Get(type)?.LookBackCount ?? this.ancestor?.Get(type)?.LookBackCount ?? defaultLookBackCount;
-        }
-
-        public void SetLookBackCount(Type type, int lookBackCount)
-        {
-            this.GetOrAdd(type).LookBackCount = lookBackCount;
-        }
-
         public int GetLookBackCount(PropertyInfo property, int defaultLookBackCount)
         {
             return this.Get(property)?.LookBackCount ?? this.Get(property.PropertyType)?.LookBackCount ?? this.ancestor?.GetLookBackCount(property, defaultLookBackCount) ?? defaultLookBackCount;
         }
 
+        /// <summary>
+        /// Sets the look-back count for the given type.
+        /// </summary>
+        /// <param name="type">The type for which to set the look-back count.</param>
+        /// <param name="lookBackCount">The look-back count to set.</param>
+        public void SetLookBackCount(Type type, int lookBackCount)
+        {
+            this.GetOrAdd(type).LookBackCount = lookBackCount;
+        }
+
+        /// <summary>
+        /// Sets the look-back count for the given property.
+        /// </summary>
+        /// <param name="property">The property for which to set the look-back count.</param>
+        /// <param name="lookBackCount">The look-back count to set.</param>
         public void SetLookBackCount(PropertyInfo property, int lookBackCount)
         {
             this.GetOrAdd(property).LookBackCount = lookBackCount;
         }
 
-        public void SetPropertySetter(PropertyInfo property, Func<DataGenerator, object> setter)
+        public void SetPropertySetter(PropertyInfo property, Func<DataGenerator, object> customValueFactory)
         {
-            this.GetOrAdd(property).CustomValue = setter;
+            this.GetOrAdd(property).CustomValue = customValueFactory;
         }
 
         public Func<DataGenerator, object> GetPropertyConstructor(PropertyInfo pi)

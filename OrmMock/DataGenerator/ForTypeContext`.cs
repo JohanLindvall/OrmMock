@@ -33,9 +33,9 @@ namespace OrmMock.DataGenerator
     public class ForTypeContext<T>
     {
         /// <summary>
-        /// Holds the object context.
+        /// Holds the data generator.
         /// </summary>
-        private readonly DataGenerator objectContext;
+        private readonly DataGenerator dataGenerator;
 
         /// <summary>
         /// Holds the customization data.
@@ -45,11 +45,11 @@ namespace OrmMock.DataGenerator
         /// <summary>
         /// Initializes a new instance of the ForTypeContext class.
         /// </summary>
-        /// <param name="objectContext">The object context.</param>
+        /// <param name="dataGenerator">The data generator.</param>
         /// <param name="customization">The customization data.</param>
-        public ForTypeContext(DataGenerator objectContext, Customization customization)
+        public ForTypeContext(DataGenerator dataGenerator, Customization customization)
         {
-            this.objectContext = objectContext;
+            this.dataGenerator = dataGenerator;
             this.customization = customization;
         }
 
@@ -60,7 +60,7 @@ namespace OrmMock.DataGenerator
         /// <returns>The typed context.</returns>
         public ForTypeContext<T> With(T singleton)
         {
-            this.objectContext.Singleton(singleton);
+            this.dataGenerator.Singleton(singleton);
 
             return this;
         }
@@ -240,7 +240,7 @@ namespace OrmMock.DataGenerator
         /// <returns>The created object.</returns>
         public T Create()
         {
-            return this.objectContext.Create<T>();
+            return this.dataGenerator.Create<T>();
         }
 
         /// <summary>
@@ -263,7 +263,7 @@ namespace OrmMock.DataGenerator
         /// <returns>A typed for context.</returns>
         public ForTypeContext<T2> For<T2>()
         {
-            return new ForTypeContext<T2>(this.objectContext, this.customization);
+            return new ForTypeContext<T2>(this.dataGenerator, this.customization);
         }
 
         /// <summary>

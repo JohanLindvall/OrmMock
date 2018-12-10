@@ -121,15 +121,6 @@ namespace OrmMock.DataGenerator
             this.reflection = reflection;
         }
 
-        /// <summary>
-        /// Resets the internally stored created objects.
-        /// </summary>
-        public void Reset()
-        {
-            this.createdObjects.Clear();
-            this.objectCount = 0;
-        }
-
         public DataGenerator WithoutRelations()
         {
             this.Relations.DefaultPrimaryKey = _ => new PropertyInfo[0];
@@ -395,7 +386,7 @@ namespace OrmMock.DataGenerator
                 var allProperties = ReflectionUtility.GetPublicPropertiesWithGettersAndSetters(inputType);
                 var pkProperties = this.Relations.GetPrimaryKeys(inputType);
                 var pkPropertiesDict = new HashSet<PropertyInfo>(pkProperties);
-                var fkDict = allProperties.Where(ReflectionUtility.IsNonGenericReferenceType).ToDictionary(p => p, p => this.Relations.GetForeignKeys(inputType, p.PropertyType));
+                var fkDict = allProperties.Where(p => ReflectionUtility.IsNonGenericReferenceType(p.PropertyType)).ToDictionary(p => p, p => this.Relations.GetForeignKeys(inputType, p.PropertyType));
                 var first11Property = fkDict.SingleOrDefault(kvp => kvp.Value.SequenceEqual(pkProperties)).Key;
                 var fkPropertiesDict = new HashSet<PropertyInfo>(fkDict.Values.SelectMany(v => v));
                 var propertiesToSet = allProperties.Where(p => !this.customization.ShouldSkip(p)).Where(p => pkPropertiesDict.Contains(p) || !fkPropertiesDict.Contains(p)).ToList(); // Remove foreign keys (keep primary keys)
@@ -416,7 +407,7 @@ namespace OrmMock.DataGenerator
                 });
 
                 // Set plain properties (without references)
-                foreach (var property in propertiesToSet.Where(ReflectionUtility.IsValueTypeOrNullableOrString))
+                foreach (var property in propertiesToSet.Where(p => ReflectionUtility.IsValueTypeOrNullableOrString(p.PropertyType)))
                 {
                     if (creatorDict.TryGetValue(property, out var valueFunc))
                     {
@@ -450,14 +441,14 @@ namespace OrmMock.DataGenerator
                     });
                 }
 
-                foreach (var property in propertiesToSet.Where(p => !ReflectionUtility.IsValueTypeOrNullableOrString(p)))
+                foreach (var property in propertiesToSet.Where(p => !ReflectionUtility.IsValueTypeOrNullableOrString(p.PropertyType)))
                 {
                     var propertyType = property.PropertyType;
                     creatorDict.TryGetValue(property, out var propertyValueCreator);
                     var lookBackCount = this.customization.GetLookBackCount(property, DefaultLookback);
                     var postCreate = this.customization.GetPostCreateAction(property);
 
-                    if (propertyType.IsGenericType)
+                    if (ReflectionUtility.IsCollectionType(propertyType))
                     {
                         var elementType = propertyType.GetGenericArguments()[0];
                         var adder = this.reflection.CollectionAdder(property, typeof(HashSet<>)); // will fail if generic type is not based on ICollection<>
@@ -492,7 +483,7 @@ namespace OrmMock.DataGenerator
                             postCreate?.Invoke(currentObject);
                         });
                     }
-                    else
+                    else if (ReflectionUtility.IsNonGenericReferenceType(propertyType))
                     {
                         // Going from t to pt
                         // Note that primary keys and foreign keys may be equal.
@@ -501,7 +492,7 @@ namespace OrmMock.DataGenerator
 
                         var pkFkEqual = foreignKeyProps.SequenceEqual(pkProperties);
 
-                        var isNullable = foreignKeyProps.Any(ReflectionUtility.IsNullableOrString) && this.customization.GetIncludeCount(property, 0) == 0;
+                        var isNullable = foreignKeyProps.Any(p => ReflectionUtility.IsNullableOrString(p.PropertyType)) && this.customization.GetIncludeCount(property, 0) == 0;
                         Func<bool> determineNullable = null;
                         if (isNullable)
                         {
@@ -558,6 +549,10 @@ namespace OrmMock.DataGenerator
 
                             postCreate?.Invoke(currentObject);
                         });
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($@"Unsupported property type {propertyType.Name}.");
                     }
                 }
 

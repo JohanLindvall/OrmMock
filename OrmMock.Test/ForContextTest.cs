@@ -325,7 +325,14 @@ namespace Test
         public void TestLimit()
         {
             this.dataGenerator.CreateMany<SimpleClass>(this.dataGenerator.ObjectLimit).ToList();
-            Assert.Throws<System.InvalidOperationException>(() => this.dataGenerator.Create<SimpleClass>());
+            Assert.Throws<InvalidOperationException>(() => this.dataGenerator.Create<SimpleClass>());
+        }
+
+        [Test]
+        public void TestCreateMany()
+        {
+            var objs = this.dataGenerator.For<SimpleClass>().CreateMany().ToList();
+            Assert.AreEqual(3, objs.Count);
         }
 
         [Test]
@@ -451,6 +458,49 @@ namespace Test
             var sc = this.dataGenerator.Create<SimpleClass>();
 
             Assert.AreEqual(2, count);
+        }
+
+        [Test]
+        public void TestWithClassProperty()
+        {
+            this.dataGenerator.For<SimpleClass2>().With(s => s.SimpleClass, _ => new SimpleClass
+            {
+                Prop1 = "foo",
+                Prop2 = "bar"
+            });
+
+            var sc = this.dataGenerator.Create<SimpleClass2>();
+
+            Assert.AreEqual("foo", sc.SimpleClass.Prop1);
+            Assert.AreEqual("bar", sc.SimpleClass.Prop2);
+        }
+
+        [Test]
+        public void TestWithClassType()
+        {
+            this.dataGenerator.For<SimpleClass>().With(() => new SimpleClass
+            {
+                Prop1 = "foo",
+                Prop2 = "bar"
+            });
+
+            var sc = this.dataGenerator.Create<SimpleClass2>();
+
+            Assert.AreEqual("foo", sc.SimpleClass.Prop1);
+            Assert.AreEqual("bar", sc.SimpleClass.Prop2);
+        }
+
+        [Test]
+        public void TestMultipleFor()
+        {
+            this.dataGenerator.For<TestClass1>()
+                .With(t => t.Name, "apa")
+                .For<TestClass2>()
+                .With(t => t.Name, "bepa");
+
+            var obj = this.dataGenerator.Create<TestClass1>();
+            Assert.AreEqual("apa", obj.Name);
+            Assert.AreEqual("bepa", obj.Class2.Name);
         }
     }
 }

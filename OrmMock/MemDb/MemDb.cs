@@ -122,6 +122,13 @@ namespace OrmMock.MemDb
         public T Create<T>() => (T)this.CreateObject(typeof(T));
 
         /// <summary>
+        /// Traverse the object graph from the root, following references and collections.
+        /// </summary>
+        /// <param name="root">The root object.</param>
+        /// <returns>An enumerable of objects.</returns>
+        public IEnumerable<object> TraverseObjectGraph(object root) => this.TraverseObjectGraph(root, new HashSet<object>(new ReferenceEqualityComparer()));
+
+        /// <summary>
         /// Removes an object of the given type having the given primary keys.
         /// </summary>
         /// <param name="keys"></param>
@@ -165,79 +172,78 @@ namespace OrmMock.MemDb
 
             var incomingObjectsLookup = new Dictionary<Tuple<Type, Type>, IList<object>>();
 
-            for (var pass = 0; pass < 2; ++pass)
+            // handle outgoing simple properties.
+            foreach (var currentObject in this.heldObjects)
             {
-                // pass 0 handle outgoing simple properties. pass 1 handle outgoing collection properties.
-                foreach (var currentObject in this.heldObjects)
+                var properties = this.GetProperties(currentObject);
+
+                foreach (var property in properties)
                 {
-                    var properties = this.GetProperties(currentObject);
+                    var propertyType = property.PropertyType;
 
-                    foreach (var property in properties)
+                    if (ReflectionUtility.IsNonGenericReferenceType(propertyType))
                     {
-                        var propertyType = property.PropertyType;
+                        var foreignObject = this.GetValue(currentObject, property);
 
-                        if (FollowCollectionType(propertyType))
+                        if (seenObjects.Contains(foreignObject))
                         {
-                            if (pass == 0)
-                            {
-                                continue;
-                            }
+                            // Update foreign keys to match foreignObject
+                            var primaryKeysOfForeignObject = this.GetPrimaryKeys(foreignObject);
 
-                            var incomingObjectsKey = Tuple.Create(currentObject.GetType(), propertyType.GetGenericArguments()[0]);
-
-                            if (incomingObjectsLookup.TryGetValue(incomingObjectsKey, out var incomingObjects))
-                            {
-                                // Set ICollection to incoming objects.
-                                this.SetCollection(currentObject, property, incomingObjects);
-                            }
-
-                            // else leave untouched (unknown collection property)
+                            this.SetForeignKeys(currentObject, foreignObject.GetType(), primaryKeysOfForeignObject); // For 1:1 primary keys may change.
                         }
-                        else if (FollowType(propertyType))
+                        else if (primaryKeyLookup().TryGetValue(Tuple.Create(propertyType, this.GetForeignKeys(currentObject, propertyType)), out foreignObject))
                         {
-                            if (pass == 1)
-                            {
-                                continue;
-                            }
+                            this.SetValue(currentObject, property, foreignObject);
+                        }
+                        else
+                        {
+                            // Object not found. Clear nullable foreign keys.
+                            this.SetValue(currentObject, property, null);
+                            this.ClearForeignKeys(currentObject, propertyType);
+                        }
 
-                            var foreignObject = this.GetValue(currentObject, property);
+                        // Build up reverse mapping of incoming objects at foreignObject
+                        var incomingObjectsKey = Tuple.Create(propertyType, currentObject.GetType());
 
-                            if (seenObjects.Contains(foreignObject))
-                            {
-                                // Update foreign keys to match foreignObject
-                                var primaryKeysOfForeignObject = this.GetPrimaryKeys(foreignObject);
+                        if (!incomingObjectsLookup.TryGetValue(incomingObjectsKey, out var incomingObjects))
+                        {
+                            incomingObjects = new List<object>();
+                            incomingObjectsLookup.Add(incomingObjectsKey, incomingObjects);
+                        }
 
-                                this.SetForeignKeys(currentObject, foreignObject.GetType(), primaryKeysOfForeignObject); // For 1:1 primary keys may change.
-                            }
-                            else if (primaryKeyLookup().TryGetValue(Tuple.Create(propertyType, this.GetForeignKeys(currentObject, propertyType)), out foreignObject))
-                            {
-                                this.SetValue(currentObject, property, foreignObject);
-                            }
-                            else
-                            {
-                                // Object not found. Clear nullable foreign keys.
-                                this.SetValue(currentObject, property, null);
-                                this.ClearForeignKeys(currentObject, propertyType);
-                            }
-
-                            // Build up reverse mapping of incoming objects at foreignObject
-                            var incomingObjectsKey = Tuple.Create(propertyType, currentObject.GetType());
-
-                            if (!incomingObjectsLookup.TryGetValue(incomingObjectsKey, out var incomingObjects))
-                            {
-                                incomingObjects = new List<object>();
-                                incomingObjectsLookup.Add(incomingObjectsKey, incomingObjects);
-                            }
-
-                            if (foreignObject != null)
-                            {
-                                incomingObjects.Add(currentObject);
-                            }
+                        if (foreignObject != null)
+                        {
+                            incomingObjects.Add(currentObject);
                         }
                     }
                 }
             }
+
+            //  handle outgoing collection properties.
+            foreach (var currentObject in this.heldObjects)
+            {
+                var properties = this.GetProperties(currentObject);
+
+                foreach (var property in properties)
+                {
+                    var propertyType = property.PropertyType;
+
+                    if (ReflectionUtility.IsCollectionType(propertyType))
+                    {
+                        var incomingObjectsKey = Tuple.Create(currentObject.GetType(), propertyType.GetGenericArguments()[0]);
+
+                        if (incomingObjectsLookup.TryGetValue(incomingObjectsKey, out var incomingObjects))
+                        {
+                            // Set ICollection to incoming objects.
+                            this.SetCollection(currentObject, property, incomingObjects);
+                        }
+                    }
+                }
+            }
+
         }
+
 
         /// <summary>
         /// Discovers new objects by traversing the graph of added objects.
@@ -273,33 +279,6 @@ namespace OrmMock.MemDb
         }
 
         /// <summary>
-        /// Determines if references to the given type should be followed by the object graph traversal function.
-        /// </summary>
-        /// <param name="t">The type of the object to inspect.</param>
-        /// <returns>True if the object with the given type should be followed; false otherwise.</returns>
-        private static bool FollowType(Type t)
-        {
-            return t.IsClass && !t.IsGenericType && Nullable.GetUnderlyingType(t) == null && t != typeof(string);
-        }
-
-        /// <summary>
-        /// Determines if references to the given collection type should be followed by the object graph traversal function.
-        /// </summary>
-        /// <param name="t">The type of the object to inspect.</param>
-        /// <returns>True if the object with the given collection type should be followed; false otherwise.</returns>
-        private static bool FollowCollectionType(Type t)
-        {
-            if (t.IsGenericType)
-            {
-                var args = t.GetGenericArguments();
-
-                return (typeof(ICollection<>).MakeGenericType(args).IsAssignableFrom(t)) && FollowType(args[0]);
-            }
-
-            return false;
-        }
-
-        /// <summary>
         /// Traverses the object graph starting from root. Traversed object are entered into seenObjects so that the same object is not traversed twice.
         /// </summary>
         /// <param name="root">The graph root.</param>
@@ -307,25 +286,14 @@ namespace OrmMock.MemDb
         /// <returns>An enumerable of discovered objects.</returns>
         private IEnumerable<object> TraverseObjectGraph(object root, HashSet<object> seenObjects)
         {
-            if (root == null)
-            {
-                yield break;
-            }
-
-            if (seenObjects.Add(root))
+            if (root != null && seenObjects.Add(root))
             {
                 yield return root;
 
-                var properties = this.GetProperties(root);
-
-                foreach (var property in properties)
+                foreach (var property in this.GetProperties(root))
                 {
-                    var propertyType = property.PropertyType;
-
-                    if (FollowCollectionType(propertyType))
+                    if (this.GetValue(root, property) is IEnumerable enumerable)
                     {
-                        var enumerable = (IEnumerable)this.GetValue(root, property);
-
                         foreach (var collectionItem in enumerable)
                         {
                             foreach (var descendant in this.TraverseObjectGraph(collectionItem, seenObjects))
@@ -334,7 +302,7 @@ namespace OrmMock.MemDb
                             }
                         }
                     }
-                    else if (FollowType(propertyType))
+                    else if (ReflectionUtility.IsNonGenericReferenceType(property.PropertyType))
                     {
                         foreach (var descendant in this.TraverseObjectGraph(this.GetValue(root, property), seenObjects))
                         {

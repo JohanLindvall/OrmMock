@@ -41,6 +41,9 @@ namespace OrmMock.Shared
         /// </summary>
         private readonly Dictionary<Tuple<Type, Type>, PropertyInfo[]> foreignKeys = new Dictionary<Tuple<Type, Type>, PropertyInfo[]>();
 
+        /// <summary>
+        /// Creates a new instance of the Relations class.
+        /// </summary>
         public Relations()
         {
             this.DefaultPrimaryKey = type =>
@@ -144,7 +147,6 @@ namespace OrmMock.Shared
         /// <param name="tThis">The type of the object.</param>
         /// <param name="tForeign">The type of the foreign object.</param>
         /// <param name="foreignKeyProperties">The foreign keys</param>
-
         private void ValidateForeignKeys(Type tThis, Type tForeign, PropertyInfo[] foreignKeyProperties)
         {
             var primaryKeyTypes = this.GetPrimaryKeys(tForeign).Select(p => p.PropertyType);
