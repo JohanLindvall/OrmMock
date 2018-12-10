@@ -127,14 +127,10 @@ namespace OrmMock.EF6
                 this.memDb.Remove(remove);
             }
 
-            this.memDb.Commit();
-
             foreach (var add in values)
             {
                 this.Add(add);
             }
-
-            this.memDb.Commit();
         }
 
         /// <summary>

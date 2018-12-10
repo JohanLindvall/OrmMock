@@ -136,14 +136,23 @@ namespace OrmMock.MemDb
         /// <returns></returns>
         private bool Remove(Keys keys, Type type)
         {
-            var result = false;
             var keyGetter = PrimaryKeyGetter(type);
 
-            var i = this.heldObjects.Count - 1;
+            var result = this.RemoveFrom(this.heldObjects, keys, type, keyGetter);
+            var result2 = this.RemoveFrom(this.newObjects, keys, type, keyGetter);
+
+            return result || result2;
+        }
+
+        private bool RemoveFrom(IList<object> objects, Keys keys, Type type, Func<object, Keys> keyGetter)
+        {
+            var result = false;
+
+            var i = objects.Count - 1;
 
             while (i >= 0)
             {
-                var toCheck = this.heldObjects[i];
+                var toCheck = objects[i];
 
                 if (toCheck.GetType() == type)
                 {
@@ -151,7 +160,7 @@ namespace OrmMock.MemDb
 
                     if (keys.Equals(toCheckKeys))
                     {
-                        this.heldObjects.RemoveAt(i);
+                        objects.RemoveAt(i);
                         result = true;
                     }
                 }
@@ -200,7 +209,10 @@ namespace OrmMock.MemDb
                         {
                             // Object not found. Clear nullable foreign keys.
                             this.SetValue(currentObject, property, null);
-                            this.ClearForeignKeys(currentObject, propertyType);
+                            if (!this.Relations.GetPrimaryKeys(currentObject.GetType()).SequenceEqual(this.Relations.GetForeignKeys(currentObject.GetType(), propertyType)))
+                            {
+                                this.ClearForeignKeys(currentObject, propertyType); // unless 1:1
+                            }
                         }
 
                         // Build up reverse mapping of incoming objects at foreignObject
