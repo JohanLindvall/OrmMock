@@ -39,7 +39,7 @@ namespace OrmMock.EF6
     /// Implements a MemDbSet.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class MemDbSet<T> : DbSet<T>, IDbSet<T>, IQueryable<T>, IEnumerable<T>, IQueryable, IEnumerable
+    public class MemDbSet<T> : DbSet<T>, IDbSet<T>, IQueryable<T>, IEnumerable<T>, IQueryable, IEnumerable, IDbAsyncEnumerable<T>
         where T : class
     {
         /// <summary>
@@ -62,19 +62,19 @@ namespace OrmMock.EF6
         }
 
         /// <inheritdoc />
-        public IEnumerator<T> GetEnumerator() => this.Queryable().GetEnumerator();
+        public IEnumerator<T> GetEnumerator() => ((IQueryable<T>)this.Queryable()).GetEnumerator();
 
         /// <inheritdoc />
         IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
 
         /// <inheritdoc />
-        public Expression Expression => this.Queryable().Expression;
+        public Expression Expression => ((IQueryable<T>)this.Queryable()).Expression;
 
         /// <inheritdoc />
         public Type ElementType => typeof(T);
 
         /// <inheritdoc />
-        public IQueryProvider Provider => new MemDbAsyncQueryProvider<T>(this.Queryable().Provider);
+        public IQueryProvider Provider => new MemDbAsyncQueryProvider<T>(((IQueryable<T>)this.Queryable()).Provider);
 
         /// <inheritdoc />
         public override T Find(params object[] keyValues) => this.memDb.Get<T>(new Keys(keyValues));
@@ -116,6 +116,8 @@ namespace OrmMock.EF6
         /// <inheritdoc />
         public override ObservableCollection<T> Local { get; }
 
+        IDbAsyncEnumerator<T> IDbAsyncEnumerable<T>.GetAsyncEnumerator() => this.Queryable().GetAsyncEnumerator();
+
         /// <summary>
         /// Seeds initial data. Called by reflection. Do not remove.
         /// </summary>
@@ -127,17 +129,19 @@ namespace OrmMock.EF6
                 this.memDb.Remove(remove);
             }
 
+
             foreach (var add in values)
             {
                 this.Add(add);
             }
+
         }
 
         /// <summary>
         /// Gets a queryable for the current set type.
         /// </summary>
         /// <returns>A queryable for the current set type.</returns>
-        private IQueryable<T> Queryable() => new MemDbAsyncEnumerable<T>(this.memDb.Get<T>());
+        private MemDbAsyncEnumerable<T> Queryable() => new MemDbAsyncEnumerable<T>(this.memDb.Get<T>());
     }
 
     // See https://github.com/rowanmiller/EntityFramework.Testing/tree/master/src/EntityFramework.Testing
