@@ -253,6 +253,7 @@ namespace Test
             db.Commit();
             var remove = new TestClass1 { Id = stored.Id };
             Assert.IsTrue(db.Remove(remove));
+            db.Commit();
             Assert.AreEqual(0, db.Count());
         }
 
@@ -394,6 +395,7 @@ namespace Test
             db.Add(stored);
             db.Commit();
             Assert.IsTrue(db.Remove<TestClass1>(new Keys(stored.Id)));
+            db.Commit();
             Assert.AreEqual(0, db.Count());
         }
 
