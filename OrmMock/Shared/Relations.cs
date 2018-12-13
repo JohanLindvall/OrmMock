@@ -42,6 +42,16 @@ namespace OrmMock.Shared
         private readonly Dictionary<Tuple<Type, Type>, PropertyInfo[]> foreignKeys = new Dictionary<Tuple<Type, Type>, PropertyInfo[]>();
 
         /// <summary>
+        /// Holds the default primary key getter
+        /// </summary>
+        private Func<Type, PropertyInfo[]> defaultPrimaryKey;
+
+        /// <summary>
+        /// Holds the default foreign key getter
+        /// </summary>
+        private Func<Type, Type, PropertyInfo[]> defaultForeignKey;
+
+        /// <summary>
         /// Creates a new instance of the Relations class.
         /// </summary>
         public Relations()
@@ -63,19 +73,35 @@ namespace OrmMock.Shared
         /// <summary>
         /// Gets or set the function used to get the default primary key.
         /// </summary>
-        public Func<Type, PropertyInfo[]> DefaultPrimaryKey { get; set; }
+        public Func<Type, PropertyInfo[]> DefaultPrimaryKey
+        {
+            get => this.defaultPrimaryKey;
+            set
+            {
+                this.defaultPrimaryKey = value;
+                ++this.Generation;
+            }
+        }
 
         /// <summary>
         /// Gets or set the function used to get the default foreign key.
         /// </summary>
-        public Func<Type, Type, PropertyInfo[]> DefaultForeignKey { get; set; }
+        public Func<Type, Type, PropertyInfo[]> DefaultForeignKey
+        {
+            get => this.defaultForeignKey;
+            set
+            {
+                this.defaultForeignKey = value;
+                ++this.Generation;
+            }
+        }
 
         /// <inheritdoc />
-
         public IRelationsCustomization RegisterPrimaryKey<T>(Expression<Func<T, object>> expression)
             where T : class
         {
             this.primaryKeys.Add(typeof(T), ExpressionUtility.GetPropertyInfo(expression));
+            ++this.Generation;
 
             return this;
         }
@@ -93,6 +119,7 @@ namespace OrmMock.Shared
             this.ValidateForeignKeys(typeof(TThis), typeof(TForeign), keys);
 
             this.foreignKeys.Add(new Tuple<Type, Type>(typeof(TThis), typeof(TForeign)), keys);
+            ++this.Generation;
 
             return this;
         }
@@ -102,6 +129,7 @@ namespace OrmMock.Shared
         {
             // Bypass validation of foreign keys and primary keys
             this.foreignKeys.Add(new Tuple<Type, Type>(typeof(TThis), typeof(TForeign)), new PropertyInfo[0]);
+            ++this.Generation;
 
             return this;
         }
@@ -140,6 +168,9 @@ namespace OrmMock.Shared
 
             return result;
         }
+
+        /// <inheritdoc />
+        public long Generation { get; private set; }
 
         /// <summary>
         /// Validates that the type of the foreign keys match the primary keys of the foreign object.

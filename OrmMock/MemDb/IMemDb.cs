@@ -29,6 +29,11 @@ namespace OrmMock.MemDb
     public interface IMemDb
     {
         /// <summary>
+        /// Resets the database to the initial empty state.
+        /// </summary>
+        void Reset();
+
+        /// <summary>
         /// Adds an object to the memory database instance.
         /// </summary>
         /// <param name="o">The object to add.</param>

@@ -42,5 +42,10 @@ namespace OrmMock.Shared
         /// <param name="tForeign">The type of the foreign object.</param>
         /// <returns></returns>
         PropertyInfo[] GetForeignKeys(Type tThis, Type tForeign);
+
+        /// <summary>
+        /// Gets the generation of the current relations.
+        /// </summary>
+        long Generation { get; }
     }
 }
