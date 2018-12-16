@@ -138,7 +138,7 @@ namespace OrmMock.MemDb
         {
             var output = new List<object>();
 
-            this.TraverseObjectGraph(null, new[] { root }, new Dictionary<object, HashSet<object>>(new ReferenceEqualityComparer()), output);
+            this.TraverseObjectGraph(null, new[] { root }, new Dictionary<object, IList<object>>(new ReferenceEqualityComparer()), output);
 
             return output;
         }
@@ -192,7 +192,7 @@ namespace OrmMock.MemDb
         /// Updates object relations and foreign keys of the held objects.
         /// </summary>
         /// <param name="seenObjects">The seen objects.</param>
-        private void UpdateObjectRelations(Dictionary<object, HashSet<object>> seenObjects)
+        private void UpdateObjectRelations(Dictionary<object, IList<object>> seenObjects)
         {
             this.heldObjects = this.heldObjects.Where(o => !this.deletedObjects.Contains(o)).ToList();
 
@@ -292,9 +292,9 @@ namespace OrmMock.MemDb
         /// Discovers new objects by traversing the graph of added objects.
         /// </summary>
         /// <returns>The hashset of all held objects (including the new objects).</returns>
-        private Dictionary<object, HashSet<object>> DiscoverNewObjects()
+        private Dictionary<object, IList<object>> DiscoverNewObjects()
         {
-            var seenObjects = this.heldObjects.ToDictionary<object, object, HashSet<object>>(h => h, h => null, new ReferenceEqualityComparer());
+            var seenObjects = this.heldObjects.ToDictionary<object, object, IList<object>>(h => h, h => null, new ReferenceEqualityComparer());
 
             var output = new List<object>();
 
@@ -329,11 +329,14 @@ namespace OrmMock.MemDb
         /// <param name="roots">The graph roots.</param>
         /// <param name="discoveredObjects">The dictionary of seen object.</param>
         /// <param name="output">The new objects.</param>
-        private void TraverseObjectGraph(object from, IList<object> roots, Dictionary<object, HashSet<object>> discoveredObjects, IList<object> output)
+        private void TraverseObjectGraph(object from, IList<object> roots, Dictionary<object, IList<object>> discoveredObjects, IList<object> output)
         {
+            var relations = new List<object>();
+
             foreach (var root in roots)
             {
-                var relations = new List<object>();
+                relations.Clear();
+
                 if (!discoveredObjects.TryGetValue(root, out var fromObjects))
                 {
                     output.Add(root); // completely new object.
@@ -341,13 +344,16 @@ namespace OrmMock.MemDb
 
                 if (fromObjects == null)
                 {
-                    fromObjects = new HashSet<object>(new ReferenceEqualityComparer());
+                    // Completely new object or existing object not visited yet.
+                    fromObjects = new List<object>();
                     discoveredObjects[root] = fromObjects;
+
+                    this.RetrieveRelations(root, relations);
                 }
 
-                if (from == null || fromObjects.Add(from))
+                if (from != null)
                 {
-                    this.RetrieveRelations(root, relations);
+                    fromObjects.Add(from);
                 }
 
                 this.TraverseObjectGraph(root, relations, discoveredObjects, output);
