@@ -405,10 +405,6 @@ namespace OrmMock.MemDb
 
         private void RetrieveRelations(object o, IList<object> objects) => this.Memoization(this.relationsRetrieverDict, o.GetType(), () => this.RelationsRetriever(o.GetType()))(o, objects);
 
-        private readonly Dictionary<Type, bool> isCollectionTypeDict = new Dictionary<Type, bool>();
-
-        private readonly Dictionary<Type, bool> isNonGenericReferenceTypeDict = new Dictionary<Type, bool>();
-
         private readonly Dictionary<Type, Func<object>> createValueDict = new Dictionary<Type, Func<object>>();
 
         private readonly Dictionary<PropertyInfo, Func<object, object>> getValueDict = new Dictionary<PropertyInfo, Func<object, object>>();
@@ -430,10 +426,6 @@ namespace OrmMock.MemDb
         private readonly Dictionary<Tuple<Type, Type>, Action<object, Keys>> setForeignKeysDict = new Dictionary<Tuple<Type, Type>, Action<object, Keys>>();
 
         private readonly Dictionary<Tuple<Type, Type>, Action<object>> clearForeignKeysDict = new Dictionary<Tuple<Type, Type>, Action<object>>();
-
-        private bool IsNonGenericReferenceType(Type type) => this.Memoization(this.isNonGenericReferenceTypeDict, type, () => ReflectionUtility.IsNonGenericReferenceType(type));
-
-        private bool IsCollectionType(Type type) => this.Memoization(this.isCollectionTypeDict, type, () => ReflectionUtility.IsCollectionType(type));
 
         private object CreateObject(Type type) => this.Memoization(this.createValueDict, type, () => this.reflection.Constructor(type))();
 
