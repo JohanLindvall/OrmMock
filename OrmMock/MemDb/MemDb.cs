@@ -198,7 +198,7 @@ namespace OrmMock.MemDb
 
             var primaryKeyLookup = CachedFunc.Create(() => this.heldObjects.ToDictionary(heldObject => Tuple.Create(heldObject.GetType(), this.GetPrimaryKeys(heldObject)), heldObject => heldObject));
 
-            var incomingObjectsLookup = new Dictionary<Tuple<Type, Type, Keys>, IList<object>>();
+            var incomingObjectsLookup = new Dictionary<object, IList<Tuple<Type, object>>>(new ReferenceEqualityComparer());
 
             // handle outgoing simple properties.
             foreach (var currentObject in this.heldObjects)
@@ -227,7 +227,7 @@ namespace OrmMock.MemDb
                         }
                     }
 
-                    if (foreignObject != null && seenObjects.ContainsKey(foreignObject))
+                    if (foreignObject != null)
                     {
                         // Update foreign keys to match foreignObject
                         var primaryKeysOfForeignObject = this.GetPrimaryKeys(foreignObject);
@@ -255,15 +255,13 @@ namespace OrmMock.MemDb
                     if (foreignObject != null)
                     {
                         // Build up reverse mapping of incoming objects at foreignObject
-                        var incomingObjectsKey = Tuple.Create(propertyType, currentObject.GetType(), this.GetForeignKeys(currentObject, propertyType));
-
-                        if (!incomingObjectsLookup.TryGetValue(incomingObjectsKey, out var incomingObjects))
+                        if (!incomingObjectsLookup.TryGetValue(foreignObject, out var incomingObjects))
                         {
-                            incomingObjects = new List<object>();
-                            incomingObjectsLookup.Add(incomingObjectsKey, incomingObjects);
+                            incomingObjects = new List<Tuple<Type, object>>();
+                            incomingObjectsLookup.Add(foreignObject, incomingObjects);
                         }
 
-                        incomingObjects.Add(currentObject);
+                        incomingObjects.Add(Tuple.Create(currentObject.GetType(), currentObject));
                     }
                 }
             }
@@ -274,13 +272,12 @@ namespace OrmMock.MemDb
                 foreach (var property in this.GetCollectionProperties(currentObject))
                 {
                     var propertyType = property.PropertyType;
+                    var incomingType = propertyType.GetGenericArguments()[0];
 
-                    var incomingObjectsKey = Tuple.Create(currentObject.GetType(), propertyType.GetGenericArguments()[0], this.GetPrimaryKeys(currentObject));
-
-                    if (incomingObjectsLookup.TryGetValue(incomingObjectsKey, out var incomingObjects))
+                    if (incomingObjectsLookup.TryGetValue(currentObject, out var incomingObjects))
                     {
                         // Set ICollection to incoming objects.
-                        this.SetCollection(currentObject, property, incomingObjects);
+                        this.SetCollection(currentObject, property, incomingObjects.Where(inc => inc.Item1 == incomingType).Select(inc => inc.Item2).ToList());
                     }
                 }
             }
