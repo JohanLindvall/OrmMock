@@ -209,11 +209,12 @@ namespace OrmMock.MemDb
 
                     var foreignObject = this.GetValue(currentObject, property);
 
-                    var isDeleted = foreignObject != null && this.deletedObjects.Contains(foreignObject);
+                    var foreignObjectDeleted = foreignObject != null && this.deletedObjects.Contains(foreignObject);
 
-                    if (isDeleted)
+                    if (foreignObjectDeleted)
                     {
                         foreignObject = null;
+                        this.SetValue(currentObject, property, null);
                     }
                     else if (foreignObject == null && seenObjects.TryGetValue(currentObject, out var fromObjects) && fromObjects != null)
                     {
@@ -234,21 +235,16 @@ namespace OrmMock.MemDb
 
                         this.SetForeignKeys(currentObject, foreignObject.GetType(), primaryKeysOfForeignObject); // For 1:1 primary keys may change.
                     }
-                    else if (!isDeleted && primaryKeyLookup().TryGetValue(Tuple.Create(propertyType, this.GetForeignKeys(currentObject, propertyType)), out foreignObject))
+                    else if (!foreignObjectDeleted && primaryKeyLookup().TryGetValue(Tuple.Create(propertyType, this.GetForeignKeys(currentObject, propertyType)), out foreignObject))
                     {
                         this.SetValue(currentObject, property, foreignObject);
                     }
                     else
                     {
                         // Object not found. Clear nullable foreign keys.
-                        if (!this.Relations.GetPrimaryKeys(currentObject.GetType()).SequenceEqual(this.Relations.GetForeignKeys(currentObject.GetType(), propertyType))) // Relax check to see if foreign keys is a subset of the primary keys
+                        if (!this.Are11Relation(currentObject.GetType(), propertyType))
                         {
-                            this.ClearForeignKeys(currentObject, propertyType); // unless 1:1
-                            this.SetValue(currentObject, property, null);
-                        }
-                        else
-                        {
-                            this.SetValue(currentObject, property, null);
+                            this.ClearForeignKeys(currentObject, propertyType);
                         }
                     }
 
@@ -407,6 +403,22 @@ namespace OrmMock.MemDb
         }
 
         private void RetrieveRelations(object o, IList<object> objects) => this.Memoization(this.relationsRetrieverDict, o.GetType(), () => this.RelationsRetriever(o.GetType()))(o, objects);
+
+        private bool Are11Relation(Type firstType, Type secondType)
+        {
+            var key = Tuple.Create(firstType, secondType);
+
+            if (!this.are11RelationsDict.TryGetValue(key, out var value))
+            {
+                value = this.Relations.GetPrimaryKeys(firstType).SequenceEqual(this.Relations.GetForeignKeys(firstType, secondType)); // Relax check to see if foreign keys are a subset of the primary keys
+
+                this.are11RelationsDict.Add(key, value);
+            }
+
+            return value;
+        }
+
+        private readonly Dictionary<Tuple<Type, Type>, bool> are11RelationsDict = new Dictionary<Tuple<Type, Type>, bool>();
 
         private readonly Dictionary<Type, Func<object>> createValueDict = new Dictionary<Type, Func<object>>();
 
