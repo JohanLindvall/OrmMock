@@ -124,7 +124,7 @@ namespace OrmMock.Shared
         /// <param name="propertyInfo">The property info.</param>
         /// <param name="defaultCollectionType">The default collection type to use if a new collection needs to be created.</param>
         /// <returns>A function object setting the contents of the collection to the given list of items.</returns>
-        public static Action<object, IList<object>> CollectionSetter(this IReflection reflection, PropertyInfo propertyInfo, Type defaultCollectionType) => reflection.CollectionSetter(propertyInfo, defaultCollectionType, true);
+        public static Action<object, IEnumerable<object>> CollectionSetter(this IReflection reflection, PropertyInfo propertyInfo, Type defaultCollectionType) => reflection.CollectionSetter(propertyInfo, defaultCollectionType, true);
 
         /// <summary>
         /// Creates a function adding the list of items to the ICollection of the given property.
@@ -133,7 +133,7 @@ namespace OrmMock.Shared
         /// <param name="propertyInfo">The property info.</param>
         /// <param name="defaultCollectionType">The default collection type to use if a new collection needs to be created.</param>
         /// <returns>A function object setting the contents of the collection to the given list of items.</returns>
-        public static Action<object, IList<object>> CollectionAdder(this IReflection reflection, PropertyInfo propertyInfo, Type defaultCollectionType) => reflection.CollectionSetter(propertyInfo, defaultCollectionType, false);
+        public static Action<object, IEnumerable<object>> CollectionAdder(this IReflection reflection, PropertyInfo propertyInfo, Type defaultCollectionType) => reflection.CollectionSetter(propertyInfo, defaultCollectionType, false);
 
         /// <summary>
         /// Creates a function setting the contents of the ICollection of the given property to the list of items.
@@ -143,7 +143,7 @@ namespace OrmMock.Shared
         /// <param name="defaultCollectionType">The default collection type to use if a new collection needs to be created.</param>
         /// <param name="clear">Determines if the collection should be cleared.</param>
         /// <returns>A function object setting the contents of the collection to the given list of items.</returns>
-        public static Action<object, IList<object>> CollectionSetter(this IReflection reflection, PropertyInfo propertyInfo, Type defaultCollectionType, bool clear)
+        public static Action<object, IEnumerable<object>> CollectionSetter(this IReflection reflection, PropertyInfo propertyInfo, Type defaultCollectionType, bool clear)
         {
             var genericArgument = propertyInfo.PropertyType.GenericTypeArguments[0];
             var interfaceType = typeof(ICollection<>).MakeGenericType(genericArgument);

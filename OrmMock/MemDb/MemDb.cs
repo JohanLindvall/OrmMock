@@ -60,6 +60,7 @@ namespace OrmMock.MemDb
             }
         }
 
+        /// <inheritdoc />
         public void Reset()
         {
             this.newObjects.Clear();
@@ -92,7 +93,13 @@ namespace OrmMock.MemDb
         /// <inheritdoc />
         public void Commit()
         {
-            var seenObjects = this.DiscoverNewObjects();
+            this.Commit(null);
+        }
+
+        /// <inheritdoc />
+        public void Commit(Action<object> newObjectAction)
+        {
+            var seenObjects = this.DiscoverNewObjects(newObjectAction);
 
             this.UpdateObjectRelations(seenObjects);
         }
@@ -198,8 +205,6 @@ namespace OrmMock.MemDb
 
             var primaryKeyLookup = CachedFunc.Create(() => this.heldObjects.ToDictionary(heldObject => Tuple.Create(heldObject.GetType(), this.GetPrimaryKeys(heldObject)), heldObject => heldObject));
 
-            var incomingObjectsLookup = new Dictionary<object, IList<Tuple<Type, object>>>(new ReferenceEqualityComparer());
-
             // handle outgoing simple properties.
             foreach (var currentObject in this.heldObjects)
             {
@@ -210,6 +215,8 @@ namespace OrmMock.MemDb
                     var foreignObject = this.GetValue(currentObject, property);
 
                     var foreignObjectDeleted = foreignObject != null && this.deletedObjects.Contains(foreignObject);
+
+                    var newRelation = false;
 
                     if (foreignObjectDeleted)
                     {
@@ -223,6 +230,7 @@ namespace OrmMock.MemDb
                             if (fromObject?.GetType() == propertyType)
                             {
                                 foreignObject = fromObject;
+                                newRelation = true;
                                 break;
                             }
                         }
@@ -233,31 +241,67 @@ namespace OrmMock.MemDb
                         // Update foreign keys to match foreignObject
                         var primaryKeysOfForeignObject = this.GetPrimaryKeys(foreignObject);
 
-                        this.SetForeignKeys(currentObject, foreignObject.GetType(), primaryKeysOfForeignObject); // For 1:1 primary keys may change.
+                        this.SetForeignKeys(currentObject, property, primaryKeysOfForeignObject); // For 1:1 primary keys may change.
+
+                        // TODO handle 1:1 add where item1 has pk set, item2 has no pk set and item1 references item 2. The above line should then be reversed.
                     }
-                    else if (!foreignObjectDeleted && primaryKeyLookup().TryGetValue(Tuple.Create(propertyType, this.GetForeignKeys(currentObject, propertyType)), out foreignObject))
+                    else if (!foreignObjectDeleted && primaryKeyLookup().TryGetValue(Tuple.Create(propertyType, this.GetForeignKeys(currentObject, property)), out foreignObject))
                     {
-                        this.SetValue(currentObject, property, foreignObject);
+                        newRelation = true;
                     }
                     else
                     {
                         // Object not found. Clear nullable foreign keys.
                         if (!this.Are11Relation(currentObject.GetType(), propertyType))
                         {
-                            this.ClearForeignKeys(currentObject, propertyType);
+                            this.ClearForeignKeys(currentObject, property);
                         }
                     }
 
-                    if (foreignObject != null)
+                    if (newRelation)
                     {
-                        // Build up reverse mapping of incoming objects at foreignObject
-                        if (!incomingObjectsLookup.TryGetValue(foreignObject, out var incomingObjects))
+                        this.SetValue(currentObject, property, foreignObject);
+
+                        // Add to incoming of seenObjects (unless already existing)
+                        if (seenObjects.TryGetValue(foreignObject, out var incoming))
                         {
-                            incomingObjects = new List<Tuple<Type, object>>();
-                            incomingObjectsLookup.Add(foreignObject, incomingObjects);
+                            if (!incoming.Contains(currentObject, new ReferenceEqualityComparer()))
+                            {
+                                incoming.Add(currentObject);
+                            }
+                            else
+                            {
+                                throw new InvalidOperationException("foo");
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            //  handle Many to many.
+            foreach (var currentObject in this.heldObjects)
+            {
+                foreach (var property in this.GetManyToManyCollectionProperties(currentObject))
+                {
+                    var coll = new List<object>();
+                    this.GetCollection(currentObject, property, coll);
+                    var incomingCurrent = seenObjects[currentObject];
+
+                    foreach (var item in coll)
+                    {
+                        if (seenObjects.TryGetValue(item, out var incoming))
+                        {
+                            if (!incoming.Contains(currentObject, new ReferenceEqualityComparer()))
+                            {
+                                incoming.Add(currentObject);
+                            }
                         }
 
-                        incomingObjects.Add(Tuple.Create(currentObject.GetType(), currentObject));
+                        if (!incomingCurrent.Contains(item, new ReferenceEqualityComparer()))
+                        {
+                            incomingCurrent.Add(item);
+                        }
                     }
                 }
             }
@@ -265,16 +309,15 @@ namespace OrmMock.MemDb
             //  handle outgoing collection properties.
             foreach (var currentObject in this.heldObjects)
             {
+                if (!seenObjects.TryGetValue(currentObject, out var incoming)) continue;
+
                 foreach (var property in this.GetCollectionProperties(currentObject))
                 {
                     var propertyType = property.PropertyType;
                     var incomingType = propertyType.GetGenericArguments()[0];
 
-                    if (incomingObjectsLookup.TryGetValue(currentObject, out var incomingObjects))
-                    {
-                        // Set ICollection to incoming objects.
-                        this.SetCollection(currentObject, property, incomingObjects.Where(inc => inc.Item1 == incomingType).Select(inc => inc.Item2).ToList());
-                    }
+                    // Set ICollection to incoming objects.
+                    this.SetCollection(currentObject, property, incoming.Where(inc => inc.GetType() == incomingType).ToList());
                 }
             }
 
@@ -284,8 +327,9 @@ namespace OrmMock.MemDb
         /// <summary>
         /// Discovers new objects by traversing the graph of added objects.
         /// </summary>
+        /// <param name="newObjectAction">An action to perform on new objects. May be null.</param>
         /// <returns>The hashset of all held objects (including the new objects).</returns>
-        private Dictionary<object, IList<object>> DiscoverNewObjects()
+        private Dictionary<object, IList<object>> DiscoverNewObjects(Action<object> newObjectAction)
         {
             var seenObjects = this.heldObjects.ToDictionary<object, object, IList<object>>(h => h, h => null, new ReferenceEqualityComparer());
 
@@ -296,6 +340,8 @@ namespace OrmMock.MemDb
             foreach (var descendant in output)
             {
                 this.heldObjects.Add(descendant);
+
+                newObjectAction?.Invoke(descendant);
 
                 // Auto-increment for new objects.
                 var properties = this.GetProperties(descendant);
@@ -366,18 +412,7 @@ namespace OrmMock.MemDb
             {
                 if (ReflectionUtility.IsCollectionType(property.PropertyType))
                 {
-                    var getter = this.reflection.Getter(property);
-                    methods.Add((obj, list) =>
-                    {
-                        var collection = getter(obj);
-                        if (collection != null)
-                        {
-                            foreach (var item in (IEnumerable)collection)
-                            {
-                                list.Add(item);
-                            }
-                        }
-                    });
+                    methods.Add(this.CollectionRelationsRetriever(property));
                 }
                 else if (ReflectionUtility.IsNonGenericReferenceType(property.PropertyType))
                 {
@@ -402,6 +437,22 @@ namespace OrmMock.MemDb
             };
         }
 
+        private Action<object, IList<object>> CollectionRelationsRetriever(PropertyInfo property)
+        {
+            var getter = this.reflection.Getter(property);
+            return ((obj, list) =>
+            {
+                var collection = getter(obj);
+                if (collection != null)
+                {
+                    foreach (var item in (IEnumerable)collection)
+                    {
+                        list.Add(item);
+                    }
+                }
+            });
+        }
+
         private void RetrieveRelations(object o, IList<object> objects) => this.Memoization(this.relationsRetrieverDict, o.GetType(), () => this.RelationsRetriever(o.GetType()))(o, objects);
 
         private bool Are11Relation(Type firstType, Type secondType)
@@ -418,29 +469,42 @@ namespace OrmMock.MemDb
             return value;
         }
 
+        private bool IsManyToManyRetriever(PropertyInfo property)
+        {
+            var propertyType = property.PropertyType;
+            var objType = property.DeclaringType;
+            var incomingType = propertyType.GetGenericArguments()[0];
+
+            return ReflectionUtility.GetPublicPropertiesWithGetters(incomingType).Where(pi => ReflectionUtility.IsCollectionType(pi.PropertyType)).Any(pi => pi.PropertyType.GetGenericArguments()[0] == objType);
+        }
+
         private readonly Dictionary<Tuple<Type, Type>, bool> are11RelationsDict = new Dictionary<Tuple<Type, Type>, bool>();
 
         private readonly Dictionary<Type, Func<object>> createValueDict = new Dictionary<Type, Func<object>>();
 
-        private readonly Dictionary<PropertyInfo, Func<object, object>> getValueDict = new Dictionary<PropertyInfo, Func<object, object>>();
+        private static readonly Dictionary<PropertyInfo, Func<object, object>> GetValueDict = new Dictionary<PropertyInfo, Func<object, object>>();
 
         private readonly Dictionary<Type, Func<object, Keys>> primaryKeyGetterDict = new Dictionary<Type, Func<object, Keys>>();
 
-        private readonly Dictionary<Type, IList<PropertyInfo>> propertyInfoDict = new Dictionary<Type, IList<PropertyInfo>>();
+        private static readonly Dictionary<Type, IList<PropertyInfo>> PropertyInfoDict = new Dictionary<Type, IList<PropertyInfo>>();
 
-        private readonly Dictionary<Type, IList<PropertyInfo>> collectionPropertyInfoDict = new Dictionary<Type, IList<PropertyInfo>>();
+        private static readonly Dictionary<Type, IList<PropertyInfo>> CollectionPropertyInfoDict = new Dictionary<Type, IList<PropertyInfo>>();
 
-        private readonly Dictionary<Type, IList<PropertyInfo>> nonGenericReferencePropertyInfoDict = new Dictionary<Type, IList<PropertyInfo>>();
+        private static readonly Dictionary<Type, IList<PropertyInfo>> ManyToManyCollectionPropertyInfoDict = new Dictionary<Type, IList<PropertyInfo>>();
 
-        private readonly Dictionary<PropertyInfo, Action<object, object>> setValueDict = new Dictionary<PropertyInfo, Action<object, object>>();
+        private static readonly Dictionary<Type, IList<PropertyInfo>> NonGenericReferencePropertyInfoDict = new Dictionary<Type, IList<PropertyInfo>>();
 
-        private readonly Dictionary<Tuple<Type, Type>, Func<object, Keys>> getForeignKeysDict = new Dictionary<Tuple<Type, Type>, Func<object, Keys>>();
+        private static readonly Dictionary<PropertyInfo, Action<object, object>> SetValueDict = new Dictionary<PropertyInfo, Action<object, object>>();
 
-        private readonly Dictionary<PropertyInfo, Action<object, IList<object>>> setCollectionDict = new Dictionary<PropertyInfo, Action<object, IList<object>>>();
+        private readonly Dictionary<PropertyInfo, Func<object, Keys>> getForeignKeysDict = new Dictionary<PropertyInfo, Func<object, Keys>>();
 
-        private readonly Dictionary<Tuple<Type, Type>, Action<object, Keys>> setForeignKeysDict = new Dictionary<Tuple<Type, Type>, Action<object, Keys>>();
+        private static readonly Dictionary<PropertyInfo, Action<object, IEnumerable<object>>> SetCollectionDict = new Dictionary<PropertyInfo, Action<object, IEnumerable<object>>>();
 
-        private readonly Dictionary<Tuple<Type, Type>, Action<object>> clearForeignKeysDict = new Dictionary<Tuple<Type, Type>, Action<object>>();
+        private static readonly Dictionary<PropertyInfo, Action<object, IList<object>>> GetCollectionDict = new Dictionary<PropertyInfo, Action<object, IList<object>>>();
+
+        private readonly Dictionary<PropertyInfo, Action<object, Keys>> setForeignKeysDict = new Dictionary<PropertyInfo, Action<object, Keys>>();
+
+        private readonly Dictionary<PropertyInfo, Action<object>> clearForeignKeysDict = new Dictionary<PropertyInfo, Action<object>>();
 
         private object CreateObject(Type type) => this.Memoization(this.createValueDict, type, () => this.reflection.Constructor(type))();
 
@@ -448,23 +512,27 @@ namespace OrmMock.MemDb
 
         private Keys GetPrimaryKeys(object o) => this.PrimaryKeyGetter(o.GetType())(o);
 
-        private IList<PropertyInfo> GetProperties(object o) => this.Memoization(this.propertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()));
+        private IList<PropertyInfo> GetProperties(object o) => this.Memoization(PropertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()));
 
-        private IList<PropertyInfo> GetCollectionProperties(object o) => this.Memoization(this.collectionPropertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()).Where(pi => ReflectionUtility.IsCollectionType(pi.PropertyType)).ToList());
+        private IList<PropertyInfo> GetCollectionProperties(object o) => this.Memoization(CollectionPropertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()).Where(pi => ReflectionUtility.IsCollectionType(pi.PropertyType)).ToList());
 
-        private IList<PropertyInfo> GetNonGenericReferenceProperties(object o) => this.Memoization(this.nonGenericReferencePropertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()).Where(pi => ReflectionUtility.IsNonGenericReferenceType(pi.PropertyType)).ToList());
+        private IList<PropertyInfo> GetManyToManyCollectionProperties(object o) => this.Memoization(ManyToManyCollectionPropertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()).Where(pi => ReflectionUtility.IsCollectionType(pi.PropertyType) && IsManyToManyRetriever(pi)).ToList());
 
-        private object GetValue(object o, PropertyInfo pi) => this.Memoization(this.getValueDict, pi, () => this.reflection.Getter(pi))(o);
+        private IList<PropertyInfo> GetNonGenericReferenceProperties(object o) => this.Memoization(NonGenericReferencePropertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()).Where(pi => ReflectionUtility.IsNonGenericReferenceType(pi.PropertyType)).ToList());
 
-        private void SetValue(object o, PropertyInfo pi, object value) => this.Memoization(this.setValueDict, pi, () => this.reflection.Setter(pi))(o, value);
+        private object GetValue(object o, PropertyInfo pi) => this.Memoization(GetValueDict, pi, () => this.reflection.Getter(pi))(o);
 
-        private Keys GetForeignKeys(object o, Type foreignType) => this.Memoization(this.getForeignKeysDict, Tuple.Create(o.GetType(), foreignType), () => this.reflection.ForeignKeyGetter(this.Relations, o.GetType(), foreignType))(o);
+        private void SetValue(object o, PropertyInfo pi, object value) => this.Memoization(SetValueDict, pi, () => this.reflection.Setter(pi))(o, value);
 
-        private void SetCollection(object o, PropertyInfo pi, IList<object> values) => this.Memoization(this.setCollectionDict, pi, () => this.reflection.CollectionSetter(pi, typeof(HashSet<>)))(o, values);
+        private Keys GetForeignKeys(object o, PropertyInfo property) => this.Memoization(this.getForeignKeysDict, property, () => this.reflection.ForeignKeyGetter(this.Relations, o.GetType(), property.PropertyType))(o);
 
-        private void SetForeignKeys(object o, Type foreignType, Keys keys) => this.Memoization(this.setForeignKeysDict, Tuple.Create(o.GetType(), foreignType), () => this.reflection.ForeignKeySetter(this.Relations, o.GetType(), foreignType))(o, keys);
+        private void SetCollection(object o, PropertyInfo pi, IEnumerable<object> values) => this.Memoization(SetCollectionDict, pi, () => this.reflection.CollectionSetter(pi, typeof(HashSet<>)))(o, values);
 
-        private void ClearForeignKeys(object o, Type foreignType) => this.Memoization(this.clearForeignKeysDict, Tuple.Create(o.GetType(), foreignType), () => this.reflection.ForeignKeyClearer(this.Relations, o.GetType(), foreignType))(o);
+        private void GetCollection(object o, PropertyInfo pi, IList<object> values) => this.Memoization(GetCollectionDict, pi, () => this.CollectionRelationsRetriever(pi))(o, values);
+
+        private void SetForeignKeys(object o, PropertyInfo property, Keys keys) => this.Memoization(this.setForeignKeysDict, property, () => this.reflection.ForeignKeySetter(this.Relations, o.GetType(), property.PropertyType))(o, keys);
+
+        private void ClearForeignKeys(object o, PropertyInfo property) => this.Memoization(this.clearForeignKeysDict, property, () => this.reflection.ForeignKeyClearer(this.Relations, o.GetType(), property.PropertyType))(o);
 
         private TValue Memoization<TKey, TValue>(Dictionary<TKey, TValue> dict, TKey key, Func<TValue> factory)
         {

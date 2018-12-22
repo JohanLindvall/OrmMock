@@ -20,6 +20,7 @@
 
 namespace OrmMock.MemDb
 {
+    using System;
     using System.Collections.Generic;
     using Shared;
 
@@ -64,6 +65,12 @@ namespace OrmMock.MemDb
         /// Commits changes to the memory database instance. References and keys are updated.
         /// </summary>
         void Commit();
+
+        /// <summary>
+        /// Commits changes to the memory database instance. References and keys are updated.
+        /// </summary>
+        /// <param name="newObjectAction">An action to perform on new objects.</param>
+        void Commit(Action<object> newObjectAction);
 
         /// <summary>
         /// Gets an enumerable of objects of the given type.
