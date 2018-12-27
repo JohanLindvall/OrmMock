@@ -109,6 +109,20 @@ namespace Test
             public ICollection<TestClass6> Class6 { get; set; }
         }
 
+        public class ManyToMany1
+        {
+            public int Id { get; set; }
+
+            public ICollection<ManyToMany2> ManyToMany2 { get; set; }
+        }
+
+        public class ManyToMany2
+        {
+            public int Id { get; set; }
+
+            public ICollection<ManyToMany1> ManyToMany1 { get; set; }
+        }
+
         private MemDb db;
 
         [SetUp]
@@ -418,6 +432,47 @@ namespace Test
             var obj = db.Get<TestClass6>().Single();
 
             Assert.AreSame(obj, obj.Class7.Class6.Single());
+        }
+
+        [Test]
+        public void TestManyToMany()
+        {
+            var mm1 = new ManyToMany1 { ManyToMany2 = new List<ManyToMany2> { new ManyToMany2(), new ManyToMany2(), new ManyToMany2() } };
+
+            db.Add(mm1);
+            db.Commit();
+            var mm = db.Get<ManyToMany1>().Single();
+            VerifyMM(mm);
+        }
+
+        [Test]
+        public void TestManyToManyB()
+        {
+            var mm1 = new ManyToMany1();
+            var mm2 = Enumerable.Range(0, 3).Select(_ => new ManyToMany2 { ManyToMany1 = new List<ManyToMany1> { mm1 } }).ToList();
+
+            db.AddMany(mm2);
+            db.Commit();
+            var mm = db.Get<ManyToMany1>().Single();
+            VerifyMM(mm);
+        }
+
+        [Test]
+        public void TestManyToManyC()
+        {
+            var mm1 = new ManyToMany1();
+            var mm2 = Enumerable.Range(0, 3).Select(_ => new ManyToMany2 { ManyToMany1 = new List<ManyToMany1> { mm1 } }).ToList();
+            mm1.ManyToMany2 = new List<ManyToMany2>(mm2);
+            db.AddMany(mm2);
+            db.Commit();
+            var mm = db.Get<ManyToMany1>().Single();
+            VerifyMM(mm);
+        }
+
+        public void VerifyMM(ManyToMany1 root)
+        {
+            Assert.AreEqual(3, root.ManyToMany2.Count);
+            Assert.IsTrue(root.ManyToMany2.All(mm => object.ReferenceEquals(mm.ManyToMany1.Single(), root)));
         }
     }
 }

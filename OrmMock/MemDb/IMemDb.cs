@@ -22,6 +22,7 @@ namespace OrmMock.MemDb
 {
     using System;
     using System.Collections.Generic;
+    using System.IO;
     using Shared;
 
     /// <summary>
@@ -106,5 +107,17 @@ namespace OrmMock.MemDb
         /// <typeparam name="T">The type of the object to create.</typeparam>
         /// <returns>An object of the given type.</returns>
         T Create<T>();
+
+        /// <summary>
+        /// Serializes the internal state to the output stream.
+        /// </summary>
+        /// <param name="output"></param>
+        void Serialize(Stream output);
+
+        /// <summary>
+        /// Deserializes the internal state from the input stream.
+        /// </summary>
+        /// <param name="input"></param>
+        void Deserialize(Stream input);
     }
 }

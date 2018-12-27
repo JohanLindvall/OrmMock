@@ -20,15 +20,16 @@
 
 namespace OrmMock.MemDb
 {
+    using Shared;
+    using Shared.Comparers;
     using System;
     using System.Collections;
     using System.Collections.Generic;
+    using System.IO;
     using System.Linq;
     using System.Linq.Expressions;
     using System.Reflection;
-
-    using Shared;
-    using Shared.Comparers;
+    using System.Text;
 
     public class MemDb : IMemDb, IMemDbCustomization
     {
@@ -150,6 +151,155 @@ namespace OrmMock.MemDb
             return output;
         }
 
+        /// <inheritdoc />
+        public void Serialize(Stream output)
+        {
+            using (var bw = new BinaryWriter(output, Encoding.UTF8, true))
+            {
+                var index = 0;
+                var typeDict = new Dictionary<Type, int>();
+                foreach (var obj in this.heldObjects)
+                {
+                    var type = obj.GetType();
+
+                    if (!typeDict.ContainsKey(type))
+                    {
+                        typeDict[type] = index++;
+                    }
+                }
+
+                bw.Write(typeDict.Count);
+                foreach (var typeEntry in typeDict.OrderBy(kvp => kvp.Value))
+                {
+                    bw.Write(typeEntry.Key.AssemblyQualifiedName);
+                }
+
+                bw.Write(this.autoIncrement.Count);
+                foreach (var ai in this.autoIncrement)
+                {
+                    bw.Write(typeDict[ai.Key.DeclaringType]);
+                    bw.Write(ai.Key.Name);
+                    bw.Write(ai.Value);
+                }
+
+                index = 0;
+                var objDict = this.heldObjects.ToDictionary(o => o, _ => index++, ReferenceEqualityComparer.Default);
+
+                void WriteObject(object value)
+                {
+                    if (value == null || !objDict.TryGetValue(value, out var objIndex))
+                    {
+                        objIndex = -1;
+                    }
+
+                    bw.Write(objIndex);
+                }
+
+                bw.Write(this.heldObjects.Count);
+
+                {
+                    foreach (var obj in this.heldObjects)
+                    {
+                        bw.Write(typeDict[obj.GetType()]);
+
+                        foreach (var prop in this.GetValueProperties(obj))
+                        {
+                            var value = this.GetValue(obj, prop);
+
+                            bw.Serialize(value, prop.PropertyType);
+                        }
+                    }
+                }
+                {
+                    var relations = new List<object>();
+                    foreach (var obj in this.heldObjects)
+                    {
+                        foreach (var prop in this.GetNonGenericReferenceProperties(obj))
+                        {
+                            var value = this.GetValue(obj, prop);
+                            WriteObject(value);
+                        }
+
+                        foreach (var propAndObj in this.GetCollectionProperties(obj))
+                        {
+                            relations.Clear();
+                            this.GetCollection(obj, propAndObj.Item1, relations);
+                            bw.Write(relations.Count);
+                            foreach (var relation in relations)
+                            {
+                                WriteObject(relation);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <inheritdoc />
+        public void Deserialize(Stream input)
+        {
+            this.autoIncrement.Clear();
+            this.Reset();
+
+            using (var br = new BinaryReader(input, Encoding.UTF8, true))
+            {
+                var types = new List<Type>();
+                for (var left = br.ReadInt32(); left > 0; --left)
+                {
+                    types.Add(Type.GetType(br.ReadString()));
+                }
+
+                for (var left = br.ReadInt32(); left > 0; --left)
+                {
+                    var type = types[br.ReadInt32()];
+                    var property = type.GetProperty(br.ReadString());
+                    this.autoIncrement.Add(property, br.ReadInt64());
+                }
+
+                for (var left = br.ReadInt32(); left > 0; --left)
+                {
+                    var idx = br.ReadInt32();
+                    var obj = this.CreateObject(types[idx]);
+                    this.heldObjects.Add(obj);
+
+                    foreach (var prop in this.GetValueProperties(obj))
+                    {
+                        var value = br.Deserialize(prop.PropertyType);
+
+                        this.SetValue(obj, prop, value);
+                    }
+                }
+
+                object ReadObject()
+                {
+                    var objIndex = br.ReadInt32();
+                    var value = objIndex == -1 ? null : this.heldObjects[objIndex];
+                    return value;
+                }
+
+                var relations = new List<object>();
+                foreach (var obj in this.heldObjects)
+                {
+                    foreach (var prop in this.GetNonGenericReferenceProperties(obj))
+                    {
+                        var value = ReadObject();
+                        this.SetValue(obj, prop, value);
+                    }
+
+                    foreach (var propAndObj in this.GetCollectionProperties(obj))
+                    {
+                        relations.Clear();
+                        for (var left = br.ReadInt32(); left > 0; --left)
+                        {
+                            relations.Add(ReadObject());
+                        }
+
+                        this.SetCollection(obj, propAndObj.Item1, relations);
+                    }
+                }
+            }
+        }
+
         /// <summary>
         /// Removes an object of the given type having the given primary keys.
         /// </summary>
@@ -238,12 +388,28 @@ namespace OrmMock.MemDb
 
                     if (foreignObject != null)
                     {
-                        // Update foreign keys to match foreignObject
-                        var primaryKeysOfForeignObject = this.GetPrimaryKeys(foreignObject);
+                        if (this.Are11Relation(currentObject.GetType(), propertyType))
+                        {
+                            if (newRelation)
+                            {
+                                // Update pk of this
+                                var primaryKeysOfForeignObject = this.GetPrimaryKeys(foreignObject);
+                                this.SetPrimaryKeys(currentObject, primaryKeysOfForeignObject);
+                            }
+                            else
+                            {
+                                // Update pk of foreign object.
+                                var primaryKeysOfForeignObject = this.GetPrimaryKeys(currentObject);
+                                this.SetPrimaryKeys(foreignObject, primaryKeysOfForeignObject);
+                            }
+                        }
+                        else
+                        {
+                            // Update foreign keys to match foreignObject primary keys
+                            var primaryKeysOfForeignObject = this.GetPrimaryKeys(foreignObject);
 
-                        this.SetForeignKeys(currentObject, property, primaryKeysOfForeignObject); // For 1:1 primary keys may change.
-
-                        // TODO handle 1:1 add where item1 has pk set, item2 has no pk set and item1 references item 2. The above line should then be reversed.
+                            this.SetForeignKeys(currentObject, property, primaryKeysOfForeignObject);
+                        }
                     }
                     else if (!foreignObjectDeleted && primaryKeyLookup().TryGetValue(Tuple.Create(propertyType, this.GetForeignKeys(currentObject, property)), out foreignObject))
                     {
@@ -265,19 +431,11 @@ namespace OrmMock.MemDb
                         // Add to incoming of seenObjects (unless already existing)
                         if (seenObjects.TryGetValue(foreignObject, out var incoming))
                         {
-                            if (!incoming.Contains(currentObject, new ReferenceEqualityComparer()))
-                            {
-                                incoming.Add(currentObject);
-                            }
-                            else
-                            {
-                                throw new InvalidOperationException("foo");
-                            }
+                            incoming.Add(currentObject);
                         }
                     }
                 }
             }
-
 
             //  handle Many to many.
             foreach (var currentObject in this.heldObjects)
@@ -290,15 +448,12 @@ namespace OrmMock.MemDb
 
                     foreach (var item in coll)
                     {
-                        if (seenObjects.TryGetValue(item, out var incoming))
+                        if (seenObjects.TryGetValue(item, out var incoming) && !incoming.Contains(currentObject, ReferenceEqualityComparer.Default))
                         {
-                            if (!incoming.Contains(currentObject, new ReferenceEqualityComparer()))
-                            {
-                                incoming.Add(currentObject);
-                            }
+                            incoming.Add(currentObject);
                         }
 
-                        if (!incomingCurrent.Contains(item, new ReferenceEqualityComparer()))
+                        if (!incomingCurrent.Contains(item, ReferenceEqualityComparer.Default))
                         {
                             incomingCurrent.Add(item);
                         }
@@ -311,13 +466,10 @@ namespace OrmMock.MemDb
             {
                 if (!seenObjects.TryGetValue(currentObject, out var incoming)) continue;
 
-                foreach (var property in this.GetCollectionProperties(currentObject))
+                foreach (var collectionPropertyAndType in this.GetCollectionProperties(currentObject))
                 {
-                    var propertyType = property.PropertyType;
-                    var incomingType = propertyType.GetGenericArguments()[0];
-
                     // Set ICollection to incoming objects.
-                    this.SetCollection(currentObject, property, incoming.Where(inc => inc.GetType() == incomingType).ToList());
+                    this.SetCollection(currentObject, collectionPropertyAndType.Item1, incoming.Where(inc => inc.GetType() == collectionPropertyAndType.Item2));
                 }
             }
 
@@ -486,13 +638,17 @@ namespace OrmMock.MemDb
 
         private readonly Dictionary<Type, Func<object, Keys>> primaryKeyGetterDict = new Dictionary<Type, Func<object, Keys>>();
 
+        private readonly Dictionary<Type, Action<object, Keys>> primaryKeySetterDict = new Dictionary<Type, Action<object, Keys>>();
+
         private static readonly Dictionary<Type, IList<PropertyInfo>> PropertyInfoDict = new Dictionary<Type, IList<PropertyInfo>>();
 
-        private static readonly Dictionary<Type, IList<PropertyInfo>> CollectionPropertyInfoDict = new Dictionary<Type, IList<PropertyInfo>>();
+        private static readonly Dictionary<Type, IList<Tuple<PropertyInfo, Type>>> CollectionPropertyInfoDict = new Dictionary<Type, IList<Tuple<PropertyInfo, Type>>>();
 
         private static readonly Dictionary<Type, IList<PropertyInfo>> ManyToManyCollectionPropertyInfoDict = new Dictionary<Type, IList<PropertyInfo>>();
 
         private static readonly Dictionary<Type, IList<PropertyInfo>> NonGenericReferencePropertyInfoDict = new Dictionary<Type, IList<PropertyInfo>>();
+
+        private static readonly Dictionary<Type, IList<PropertyInfo>> ValuePropertyInfoDict = new Dictionary<Type, IList<PropertyInfo>>();
 
         private static readonly Dictionary<PropertyInfo, Action<object, object>> SetValueDict = new Dictionary<PropertyInfo, Action<object, object>>();
 
@@ -512,13 +668,17 @@ namespace OrmMock.MemDb
 
         private Keys GetPrimaryKeys(object o) => this.PrimaryKeyGetter(o.GetType())(o);
 
+        private void SetPrimaryKeys(object o, Keys k) => this.Memoization(this.primaryKeySetterDict, o.GetType(), () => this.reflection.PrimaryKeySetter(this.Relations, o.GetType()))(o, k);
+
         private IList<PropertyInfo> GetProperties(object o) => this.Memoization(PropertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()));
 
-        private IList<PropertyInfo> GetCollectionProperties(object o) => this.Memoization(CollectionPropertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()).Where(pi => ReflectionUtility.IsCollectionType(pi.PropertyType)).ToList());
+        private IList<Tuple<PropertyInfo, Type>> GetCollectionProperties(object o) => this.Memoization(CollectionPropertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()).Where(pi => ReflectionUtility.IsCollectionType(pi.PropertyType)).Select(pi => Tuple.Create(pi, pi.PropertyType.GetGenericArguments()[0])).ToList());
 
         private IList<PropertyInfo> GetManyToManyCollectionProperties(object o) => this.Memoization(ManyToManyCollectionPropertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()).Where(pi => ReflectionUtility.IsCollectionType(pi.PropertyType) && IsManyToManyRetriever(pi)).ToList());
 
         private IList<PropertyInfo> GetNonGenericReferenceProperties(object o) => this.Memoization(NonGenericReferencePropertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()).Where(pi => ReflectionUtility.IsNonGenericReferenceType(pi.PropertyType)).ToList());
+
+        private IList<PropertyInfo> GetValueProperties(object o) => this.Memoization(ValuePropertyInfoDict, o.GetType(), () => ReflectionUtility.GetPublicPropertiesWithGetters(o.GetType()).Where(pi => ReflectionUtility.IsValueTypeOrNullableOrString(pi.PropertyType)).ToList());
 
         private object GetValue(object o, PropertyInfo pi) => this.Memoization(GetValueDict, pi, () => this.reflection.Getter(pi))(o);
 

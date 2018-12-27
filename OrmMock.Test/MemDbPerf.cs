@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -44,6 +45,35 @@ namespace Test
                 this.memDb.Add(this.root);
 
                 this.memDb.Commit();
+            }
+        }
+
+
+        // [Test]
+        public void TestSerialize()
+        {
+            this.memDb.Add(this.root);
+            this.memDb.Commit();
+
+            for (var i = 0; i < 1000; ++i)
+            {
+                var ms = new MemoryStream();
+                this.memDb.Serialize(ms);
+            }
+        }
+
+        // [Test]
+        public void TestDeserialize()
+        {
+            this.memDb.Add(this.root);
+            this.memDb.Commit();
+
+            var ms = new MemoryStream();
+            this.memDb.Serialize(ms);
+            for (var i = 0; i < 1000; ++i)
+            {
+                ms.Position = 0;
+                this.memDb.Deserialize(ms);
             }
         }
 

@@ -29,6 +29,11 @@ namespace OrmMock.Shared.Comparers
     /// </summary>
     public class ReferenceEqualityComparer : IEqualityComparer<object>
     {
+        /// <summary>
+        /// Gets the default instance.
+        /// </summary>
+        public static ReferenceEqualityComparer Default => new ReferenceEqualityComparer();
+
         /// <inheritdoc />
         bool IEqualityComparer<object>.Equals(object x, object y)
         {

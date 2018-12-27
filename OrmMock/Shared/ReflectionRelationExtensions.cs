@@ -40,6 +40,18 @@ namespace OrmMock.Shared
         }
 
         /// <summary>
+        /// Creates a primary key setter for the given type and relations.
+        /// </summary>
+        /// <param name="reflection">The IReflection instance.</param>
+        /// <param name="relations">The relations.</param>
+        /// <param name="thisType">The type of the object.</param>
+        /// <returns>A function setting the primary keys of an object.</returns>
+        public static Action<object, Keys> PrimaryKeySetter(this IReflection reflection, IRelations relations, Type thisType)
+        {
+            return reflection.KeySetter(relations.GetPrimaryKeys(thisType));
+        }
+
+        /// <summary>
         /// Creates a foreign key getter for the given types and relations.
         /// </summary>
         /// <param name="reflection">The IReflection instance.</param>
