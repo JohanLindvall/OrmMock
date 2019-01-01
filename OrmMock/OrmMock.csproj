@@ -45,6 +45,7 @@
   <ItemGroup>
     <Compile Include="MemDb\IMemDb.cs" />
     <Compile Include="MemDb\IMemDbCustomization.cs" />
+    <Compile Include="Shared\BinaryWriterExtensions.cs" />
     <Compile Include="Shared\Comparers\ObjectArrayComparer.cs" />
     <Compile Include="Shared\Comparers\ReferenceEqualityComparer.cs" />
     <Compile Include="Shared\CachedFunc.cs" />
@@ -64,7 +65,7 @@
     <Compile Include="Shared\Relations.cs" />
     <Compile Include="DataGenerator\Customization.cs" />
     <Compile Include="DataGenerator\ValueCreator.cs" />
-    <Compile Include="Shared\SerializationExtensions.cs" />
+    <Compile Include="Shared\BinaryReaderExtensions.cs" />
     <Compile Include="Shared\StandardReflection.cs" />
   </ItemGroup>
   <ItemGroup>

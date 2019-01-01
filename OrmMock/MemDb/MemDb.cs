@@ -253,6 +253,7 @@ namespace OrmMock.MemDb
                 {
                     var type = types[br.ReadInt32()];
                     var property = type.GetProperty(br.ReadString());
+                    // ReSharper disable once AssignNullToNotNullAttribute
                     this.autoIncrement.Add(property, br.ReadInt64());
                 }
 
