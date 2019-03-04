@@ -353,12 +353,32 @@ namespace Test
                 .With(() => "str");
 
             this.dataGenerator.For<SimpleClass>()
-                .With(sc => sc.Prop1, _ => "str1")
-                .With(sc => sc.Prop2, _ => "str2");
+                .With(sc => sc.Prop1, () => "str1")
+                .With(sc => sc.Prop2, "str2");
 
             var obj = this.dataGenerator.Create<SimpleClass>();
             Assert.AreEqual("str1", obj.Prop1);
             Assert.AreEqual("str2", obj.Prop2);
+        }
+
+        [Test]
+        public void TestCustomProperty2()
+        {
+            var obj = this.dataGenerator.Build<SimpleClass2>()
+                .With(sc => sc.SimpleClass.Prop1, "str1")
+                .Create();
+
+            Assert.AreEqual("str1", obj.SimpleClass.Prop1);
+        }
+
+        [Test]
+        public void TestCustomProperty3()
+        {
+            var obj = this.dataGenerator.Build<SimpleClass2>()
+                .With(sc => sc.SimpleClass.Prop1, sc => sc.SimpleClass.Prop2)
+                .Create();
+
+            Assert.AreEqual(obj.SimpleClass.Prop2, obj.SimpleClass.Prop1);
         }
 
         [Test]
@@ -442,7 +462,7 @@ namespace Test
         [Test]
         public void TestPostCreate()
         {
-            this.dataGenerator.For<SimpleClass>().PostCreate(s => s.Prop2 = "hello");
+            this.dataGenerator.For<SimpleClass>().AddPostCreate(s => s.Prop2 = "hello");
 
             var sc = this.dataGenerator.Create<SimpleClass>();
 
@@ -463,7 +483,7 @@ namespace Test
         [Test]
         public void TestWithClassProperty()
         {
-            this.dataGenerator.For<SimpleClass2>().With(s => s.SimpleClass, _ => new SimpleClass
+            this.dataGenerator.For<SimpleClass2>().With(s => s.SimpleClass, () => new SimpleClass
             {
                 Prop1 = "foo",
                 Prop2 = "bar"

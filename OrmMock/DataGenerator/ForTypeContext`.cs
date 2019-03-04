@@ -109,7 +109,7 @@ namespace OrmMock.DataGenerator
         /// <returns>The typed context.</returns>
         public ForTypeContext<T> Include(Expression<Func<T, object>> e, int count = 3)
         {
-            return this.ForEach(e, pi => { HandleInclude(count, pi); });
+            return this.ForEach(e, pi => HandleInclude(count, pi));
         }
 
         /// <summary>
@@ -120,7 +120,7 @@ namespace OrmMock.DataGenerator
         /// <returns>The generator.</returns>
         public ForTypeContext<T> Include(IList<PropertyInfo> properties, int count = 3)
         {
-            return this.ForEach(properties, pi => { HandleInclude(count, pi); });
+            return this.ForEach(properties, pi => HandleInclude(count, pi));
         }
 
         /// <summary>
@@ -130,7 +130,7 @@ namespace OrmMock.DataGenerator
         /// <returns>The generator.</returns>
         public ForTypeContext<T> With(Expression<Func<T, object>> e)
         {
-            return this.ForEach(e, pi => { this.customization.SetIncludeCount(pi, 1); });
+            return this.ForEach(e, pi => this.customization.SetIncludeCount(pi, 1));
         }
 
         /// <summary>
@@ -141,7 +141,7 @@ namespace OrmMock.DataGenerator
         /// <returns>The generator.</returns>
         public ForTypeContext<T> With<T2>(Expression<Func<T, T2>> e, T2 value)
         {
-            return this.With(e, _ => value);
+            return this.With(e, () => value);
         }
 
         /// <summary>
@@ -150,13 +150,42 @@ namespace OrmMock.DataGenerator
         /// <param name="e">The property expression.</param>
         /// <param name="value">The value generator.</param>
         /// <returns>The generator.</returns>
-        public ForTypeContext<T> With<T2>(Expression<Func<T, T2>> e, Func<DataGenerator, T2> value)
+        public ForTypeContext<T> With<T2>(Expression<Func<T, T2>> e, Expression<Func<T2>> value)
         {
-            return this.ForEach(e, pi =>
+            if (e.Body.NodeType == ExpressionType.MemberAccess)
             {
-                this.customization.SetLookBackCount(pi, 0);
-                this.customization.SetPropertySetter(pi, ctx => value(ctx));
-            });
+                var member = e.Body as MemberExpression;
+                // ReSharper disable once PossibleNullReferenceException
+                if (member.Expression.NodeType == ExpressionType.Parameter)
+                {
+                    var rhsDelegate = value.Compile();
+                    var pi = member.Member as PropertyInfo;
+                    this.customization.SetLookBackCount(pi, 0);
+                    this.customization.SetPropertySetter(pi, _ => rhsDelegate());
+                    return this;
+                }
+            }
+
+            var assign = Expression.Assign(e.Body, Expression.Invoke(value));
+            var expr = Expression.Lambda<Action<T>>(assign, ExpressionUtility.GetParameterExpression(e)).Compile();
+            this.AddPostCreate(o => expr(o));
+
+            return this;
+        }
+
+        /// <summary>
+        /// Sets a property to a specific value generator.
+        /// </summary>
+        /// <param name="e">The property expression.</param>
+        /// <param name="value">The value generator.</param>
+        /// <returns>The generator.</returns>
+        public ForTypeContext<T> With<T2>(Expression<Func<T, T2>> e, Expression<Func<T, T2>> value)
+        {
+            var assign = Expression.Assign(e.Body, Expression.Invoke(value, ExpressionUtility.GetParameterExpression(value)));
+            var expr = Expression.Lambda<Action<T, T>>(assign, ExpressionUtility.GetParameterExpression(e), ExpressionUtility.GetParameterExpression(value)).Compile();
+            this.AddPostCreate(o => expr(o, o));
+
+            return this;
         }
 
         /// <summary>
@@ -189,9 +218,9 @@ namespace OrmMock.DataGenerator
         /// </summary>
         /// <param name="action">The action to perform.</param>
         /// <returns>The type context.</returns>
-        public ForTypeContext<T> PostCreate(Action<T> action)
+        public ForTypeContext<T> AddPostCreate(Action<T> action)
         {
-            this.customization.PostCreate(action);
+            this.customization.AddPostCreate(action);
             return this;
         }
 

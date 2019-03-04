@@ -67,5 +67,23 @@ namespace OrmMock.Shared
 
             throw new InvalidOperationException("Unsupported expression.");
         }
+
+        public static ParameterExpression GetParameterExpression(Expression e)
+        {
+            while (e != null && e.NodeType != ExpressionType.Parameter)
+            {
+                if (e.NodeType == ExpressionType.MemberAccess)
+                {
+                    e = ((MemberExpression)e).Expression;
+                }
+
+                if (e.NodeType == ExpressionType.Lambda)
+                {
+                    e = ((LambdaExpression) e).Body;
+                }
+            }
+
+            return (ParameterExpression)e;
+        }
     }
 }

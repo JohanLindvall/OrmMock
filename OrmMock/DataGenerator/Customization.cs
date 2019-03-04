@@ -114,9 +114,17 @@ namespace OrmMock.DataGenerator
         /// </summary>
         /// <typeparam name="T">The type of the object.</typeparam>
         /// <param name="action">The post-create action.</param>
-        public void PostCreate<T>(Action<T> action)
+        public void AddPostCreate<T>(Action<T> action)
         {
-            this.GetOrAdd(typeof(T)).PostCreate = o => action((T)o);
+            var tc = this.GetOrAdd(typeof(T));
+
+            var oldAction = tc.PostCreate;
+
+            tc.PostCreate = o =>
+            {
+                oldAction?.Invoke(o);
+                action((T)o);
+            };
         }
 
         /// <summary>
@@ -128,7 +136,6 @@ namespace OrmMock.DataGenerator
         {
             this.GetOrAdd(pi).PostCreate = o => action((T)o);
         }
-
 
         /// <summary>
         /// Gets the look-back count for the given property.
