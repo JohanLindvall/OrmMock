@@ -366,9 +366,11 @@ namespace Test
         {
             var obj = this.dataGenerator.Build<SimpleClass2>()
                 .With(sc => sc.SimpleClass.Prop1, "str1")
+                .With(sc => sc.SimpleClass.Prop2, "xxx")
                 .Create();
 
             Assert.AreEqual("str1", obj.SimpleClass.Prop1);
+            Assert.AreEqual("xxx", obj.SimpleClass.Prop2);
         }
 
         [Test]
